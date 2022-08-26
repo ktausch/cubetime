@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 """
 File: $CUBETIME/run_timer.py
 Author: Keith Tauscher

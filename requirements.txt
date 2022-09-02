@@ -1,0 +1,10 @@
+black
+click
+fastparquet
+flake8
+matplotlib
+mypy
+numpy
+pandas
+pytest
+pyyaml

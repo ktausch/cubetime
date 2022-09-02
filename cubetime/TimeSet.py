@@ -1,0 +1,574 @@
+from xml.sax.handler import property_declaration_handler
+import click
+from datetime import datetime
+import time
+from typing import Any, Dict, List, Tuple, Union
+from typing_extensions import Self
+
+import numpy as np
+import pandas as pd
+
+from cubetime.CompareStyle import CompareStyle
+from cubetime.CompareTime import CompareTime, compare_terminal_output
+from cubetime.Config import decimal_format
+
+DATE_COLUMN: str = "date"
+"""Name of the date column in the dataframes"""
+
+
+class TimeSet:
+    """
+    Class representing a set of times on a single timed task.
+    """
+
+    def __init__(self, times: pd.DataFrame, copy: bool = False, min_best: bool = True):
+        """
+        Initializes a new TimeSet with a DataFrame
+
+        Args:
+            times: DataFrame containing segment times and dates of runs
+            copy: if True, times is copied before being stored
+        """
+        self.times: pd.DataFrame = times.copy() if copy else times
+        self.segments: List[str] = self._process_columns_into_segments()
+        self.min_best: bool = min_best
+
+    @property
+    def num_segments(self) -> int:
+        """
+        Gets the number of segments.
+
+        Returns:
+            integer number of segments
+        """
+        return len(self.segments)
+
+    @property
+    def is_multi_segment(self) -> bool:
+        """
+        Determines if this is a multi-segment task or not.
+
+        Returns:
+            True if there is more than one segment
+        """
+        return self.num_segments > 1
+
+    def __len__(self) -> int:
+        """
+        Allows use of len built-in.
+
+        Returns:
+            integer number of times stored in this set
+        """
+        return len(self.times)
+
+    def __bool__(self) -> bool:
+        """
+        Allows this object to be used in boolean contexts.
+
+        Returns:
+            True if times exist, False otherwise
+        """
+        return len(self) > 0
+
+    @classmethod
+    def create_new(cls, segments: List[str] = None, min_best: bool = True) -> Self:
+        """
+        Creates a new TimeSet that is empty (i.e. has no runs in it).
+
+        Args:
+            segments: string names of segments of run.
+                If None, segments set to ["total"]
+            min_best: if True, minimum times are considered best, otherwise maximum used
+        """
+        if segments is None:
+            segments = ["total"]
+        columns = [DATE_COLUMN] + segments
+        frame = pd.DataFrame(columns=columns)
+        return cls(frame, copy=False, min_best=min_best)
+
+    @classmethod
+    def create_new_like(cls, other: Self) -> Self:
+        """
+        Creates a new TimeSet with same columns as the given one.
+
+        Args:
+            other: the TimeSet to copy segments from
+
+        """
+        return cls(other.times[0:0], min_best=other.min_best, copy=True)
+
+    @classmethod
+    def combine(cls, first: Self, *others: Self) -> Self:
+        """
+        Combines many TimeSet objects into one.
+
+        Args:
+            first: times that will appear first in the combined frame
+            others: other TimeSet objects to combine. Will appear in same order as given
+
+        Returns:
+            combined TimeSet
+        """
+        frames: List[pd.DataFrame] = [first.times]
+        for other in others:
+            frames.append(other.times)
+            if other.min_best != first.min_best:
+                raise ValueError("TimeSet objects to combine must have same min_best.")
+        combined_frame = pd.concat(frames, axis=0, ignore_index=True)
+        return cls(combined_frame, copy=False, min_best=first.min_best)
+
+    def save(self, filename: str) -> None:
+        """
+        Saves the TimeSet database to a parquet file.
+
+        NOTE: the min_best switch is not stored. It must be provided upon loading
+
+        Args:
+            filename: location to save parquet file, preferably with .parquet extension
+        """
+        self.times.to_parquet(filename)
+        return
+
+    @classmethod
+    def load(cls, filename: str, min_best: bool = True) -> Self:
+        """
+        Creates a TimeSet object from a database previously saved via save method.
+
+        Args:
+            filename: location to load parquet file from
+            min_best: if True, minimum times are considered best, otherwise maximum used
+
+        Returns:
+            TimeSet object based on database loaded from the parquet file
+        """
+        return cls(pd.read_parquet(filename), copy=False, min_best=min_best)
+
+    def _process_columns_into_segments(self: Self) -> List[str]:
+        """
+        Checks the times DataFrame is valid and assembles lists of segments.
+
+        Ensures that the date column and total column are included
+        in the columns of DataFrame (throws ValueError otherwise).
+
+        Returns:
+            list of string names of segments
+        """
+        date_present: bool = False
+        segments: List[str] = []
+        for column in self.times.columns:
+            if column == DATE_COLUMN:
+                date_present = True
+            else:
+                segments.append(column)
+        if date_present:
+            if segments:
+                return segments
+            else:
+                raise ValueError(f"No segment columns were found in times DataFrame.")
+        else:
+            raise ValueError(
+                f'"{DATE_COLUMN}" was expected to be a column in '
+                "times DataFrame, but it was not found."
+            )
+
+    @property
+    def dates(self) -> np.ndarray:
+        """
+        Gets the dates of all runs.
+
+        Returns:
+            1D numpy.ndarray of dates when runs took place
+        """
+        return self.times[DATE_COLUMN].values
+
+    @property
+    def values(self) -> np.ndarray:
+        """
+        Gets the times of all segments from all runs.
+
+        Returns:
+            2D numpy.ndarray where the rows are different
+            runs and the columns are different segments.
+        """
+        return self.times[self.segments].values
+
+    @property
+    def cumulative_times(self) -> pd.DataFrame:
+        """
+        Gets the times at the end of each segment of each run.
+
+        Returns:
+            DataFrame with same column names as times with
+            cumulative times instead of segment times
+        """
+        frame = self.times[[DATE_COLUMN]].copy()
+        frame[self.segments] = np.cumsum(self.values, axis=1)
+        return frame
+
+    def _get_extreme_times(self, frame: pd.DataFrame, best: bool = True) -> pd.Series:
+        """
+        Aggregates all rows into the extreme times by segment
+
+        Args:
+            frame: DataFrame containing times (standalone or cumulative) by segment
+            best: if True, best times are yielded. if False, worst times are yielded
+
+        Returns:
+            Series containing the extreme times for each segment
+        """
+        subframe = frame[self.segments]
+        kwargs: Dict[str, Any] = {"axis": 0, "skipna": True}
+        should_do_min: bool = self.min_best == best
+        return subframe.min(**kwargs) if should_do_min else subframe.max(**kwargs)
+
+    def _get_average_times(self, frame: pd.DataFrame) -> pd.Series:
+        """
+        Aggregates all rows into the average times by segment
+
+        Args:
+            frame: DataFrame containing times (standalone or cumulative) by segment
+
+        Returns:
+            Series containing the average times for each segment
+        """
+        return frame[self.segments].mean(axis=0, skipna=True)
+
+    @property
+    def best_cumulative_times(self) -> pd.Series:
+        """
+        For each segment, stores the best time through that segment.
+
+        Returns:
+            Series containing best cumulative times, indexed by segment name
+        """
+        return self._get_extreme_times(frame=self.cumulative_times, best=True)
+
+    def extreme_run_index(self, best: bool = True) -> int:
+        """
+        Finds the run with either the best or worst final time.
+
+        Args:
+            best: if True, best run index returned. if False, worst run index returned
+
+        Returns:
+            run index of extreme run
+        """
+        final_times: np.ndarray = self.cumulative_times[self.segments[-1]].values
+        should_do_min: bool = self.min_best == best
+        return np.argmin(final_times) if should_do_min else np.argmax(final_times)
+
+    @property
+    def best_run_index(self) -> int:
+        """
+        The index of the run with the best final time.
+
+        Returns:
+            integer index of best run
+        """
+        return self.extreme_run_index(best=True)
+
+    @property
+    def worst_run_index(self) -> int:
+        """
+        The index of the run with the worst final time.
+
+        Returns:
+            integer index of worst run
+        """
+        return self.extreme_run_index(best=False)
+
+    @property
+    def average_cumulative_times(self) -> pd.Series:
+        """
+        For each segment, stores the average time through that segment.
+
+        Returns:
+            Series containing average cumulative times, indexed by segment name
+        """
+        return self._get_average_times(frame=self.cumulative_times)
+
+    @property
+    def worst_cumulative_times(self) -> pd.Series:
+        """
+        For each segment, stores the worst time through that segment.
+
+        Returns:
+            Series containing best cumulative times, indexed by segment name
+        """
+        return self._get_extreme_times(frame=self.cumulative_times, best=False)
+
+    @property
+    def best_times(self) -> pd.Series:
+        """
+        For each segment, stores the best time of that segment.
+
+        Returns:
+            Series containing best standalone times, indexed by segment name
+        """
+        return self._get_extreme_times(frame=self.times, best=True)
+
+    @property
+    def average_times(self) -> pd.Series:
+        """
+        For each segment, stores the average time of that segment.
+
+        Returns:
+            Series containing average standalone times, indexed by segment name
+        """
+        return self._get_average_times(frame=self.times)
+
+    @property
+    def worst_times(self) -> pd.Series:
+        """
+        For each segment, stores the worst time of that segment.
+
+        Returns:
+            Series containing worst standalone times, indexed by segment name
+        """
+        return self._get_extreme_times(frame=self.times, best=False)
+
+    def add_row(self, date: datetime, segment_times: np.ndarray) -> None:
+        """
+        Adds a new row to the set.
+
+        Args:
+            date: the time with which the row should be associated
+            segment_times: array of (standalone) segment times
+        """
+        array_data: np.ndarray = np.ndarray((1, len(self.times.columns)), dtype=object)
+        segment_index = 0
+        for (column_index, column) in enumerate(self.times.columns):
+            if column == DATE_COLUMN:
+                array_data[0, column_index] = date
+            else:
+                array_data[0, column_index] = segment_times[segment_index]
+                segment_index += 1
+        new_row = pd.DataFrame(array_data, columns=self.times.columns)
+        if len(self.times) == 0:
+            self.times = new_row
+        else:
+            self.times = pd.concat([self.times, new_row], axis=0, ignore_index=True)
+
+    @staticmethod
+    def make_compare_times_from_segment_times(
+        times: np.ndarray,
+    ) -> Tuple[CompareTime, CompareTime]:
+        """
+        Makes standalone and cumulative compare times from a given set of segment times.
+
+        Args:
+            times: standalone times for each segment
+
+        Returns:
+            (segment_comparison, cumulative_comparison)
+                segment_comparison: compare times for standalone segments
+                cumulative_comparison: compare times for cumulative segments
+        """
+        return (CompareTime(times), CompareTime(np.cumsum(times)))
+
+    def make_compare_times_from_run(
+        self, which: int
+    ) -> Tuple[CompareTime, CompareTime]:
+        """
+        Makes standalone and cumulative compare times from a specific run index.
+
+        Args:
+            which: the index of the run to create comparisons with
+
+        Returns:
+            (segment_comparison, cumulative_comparison)
+                segment_comparison: compare times for standalone segments
+                cumulative_comparison: compare times for cumulative segments
+        """
+        times: np.ndarray = self.times[self.segments].loc[which].values
+        return self.make_compare_times_from_segment_times(times)
+
+    def make_compare_times(
+        self, compare_style: CompareStyle
+    ) -> Tuple[CompareTime, CompareTime]:
+        """
+        Makes standalone and cumulative compare times from a specific run index.
+
+        Args:
+            compare_style: the method of comparison
+
+        Returns:
+            (segment_comparison, cumulative_comparison)
+                segment_comparison: compare times for standalone segments
+                cumulative_comparison: compare times for cumulative segments
+        """
+        if not self:
+            return (CompareTime(None), CompareTime(None))
+        elif compare_style == CompareStyle.BEST_RUN:
+            return self.make_compare_times_from_run(self.best_run_index)
+        elif compare_style == CompareStyle.WORST_RUN:
+            return self.make_compare_times_from_run(self.worst_run_index)
+        elif compare_style == CompareStyle.LAST_RUN:
+            return self.make_compare_times_from_run(-1)
+        elif compare_style == CompareStyle.BEST_SEGMENTS:
+            return self.make_compare_times_from_segment_times(self.best_times.values)
+        elif compare_style == CompareStyle.AVERAGE_SEGMENTS:
+            return self.make_compare_times_from_segment_times(self.average_times.values)
+        elif compare_style == CompareStyle.WORST_SEGMENTS:
+            return self.make_compare_times_from_segment_times(self.worst_times.values)
+        else:
+            return CompareTime(None), CompareTime(None)
+
+    @property
+    def best_compare_times(self) -> Tuple[CompareTime, CompareTime]:
+        """
+        Gets the best segment and cumulative times.
+
+        Returns:
+            (best_segments, best_cumulative)
+                best_segments: Comparison for best standalone times
+                best_cumulative: Comparison for best cumulative times
+        """
+        if self:
+            best_segments = CompareTime(self.best_times.values)
+            best_cumulatives = CompareTime(self.best_cumulative_times.values)
+            return (best_segments, best_cumulatives)
+        else:
+            return (CompareTime(None), CompareTime(None))
+
+    def time(self, compare_style: CompareStyle = CompareStyle.BEST_RUN) -> None:
+        """
+        Interactively times a new run.
+
+        Args:
+            compare_style: the method of comparison
+        """
+        date: datetime = datetime.now()
+        click.prompt(f"Start {self.segments[0]}", default="", show_default=False)
+        (compare_segments, compare_cumulatives) = self.make_compare_times(compare_style)
+        (best_segments, best_cumulatives) = self.best_compare_times
+        unix_times: List[float] = [time.time()]
+        while True:
+            segment_index: int = len(unix_times) - 1
+            if segment_index == self.num_segments:
+                break
+            prompt_message: str = f"Finish {self.segments[segment_index]}"
+            try:
+                prompt_input: str = click.prompt(
+                    prompt_message,
+                    default="",
+                    show_default=False
+                )
+                if prompt_input.lower() == "abort":
+                    break
+                unix_times.append(time.time())
+            except KeyboardInterrupt:
+                unix_times.pop()
+                if unix_times:
+                    click.echo(
+                        f'Undoing finish of "{self.segments[segment_index - 1]}"'
+                    )
+                    continue
+                else:
+                    raise KeyboardInterrupt("Aborting run!")
+            segment_time_string: str = compare_terminal_output(
+                segment_index=segment_index,
+                time=(unix_times[-1] - unix_times[-2]),
+                current=compare_segments,
+                best=best_segments,
+                min_best=self.min_best,
+            )
+            echo_message: str = f"Segment time: {segment_time_string}"
+            if self.is_multi_segment:
+                cumulative_time_string: str = compare_terminal_output(
+                    segment_index=segment_index,
+                    time=(unix_times[-1] - unix_times[0]),
+                    current=compare_cumulatives,
+                    best=best_cumulatives,
+                    min_best=self.min_best,
+                )
+                echo_message += f", cumulative time: {cumulative_time_string}"
+            click.echo(echo_message)
+        self._process_raw_times(date, unix_times)
+        return
+
+    def _process_raw_times(self, date: datetime, unix_times: List[float]) -> None:
+        """
+        Processes times that were given interactively.
+
+        NOTE: If run was aborted before finishing, fills in remaining segments with NaNs
+
+        Args:
+            date: datetime representing time that run was started
+            unix_times: list of max length self.num_segments+1 giving start/end times
+        """
+        new_times: np.ndarray = np.diff(unix_times)
+        if len(new_times) > 0:
+            num_nans_to_concatenate: int = self.num_segments - len(new_times)
+            if num_nans_to_concatenate > 0:
+                if not self:
+                    click.echo(
+                        "First run must be complete for stability "
+                        "reasons. Not adding times."
+                    )
+                    return
+                nans_to_concatenate = np.ones(num_nans_to_concatenate) * np.nan
+                new_times = np.concatenate([new_times, nans_to_concatenate])
+            if click.confirm("Should this run be added?"):
+                self.add_row(date, new_times)
+            else:
+                click.echo("OK. Not adding.")
+        else:
+            click.echo("Not adding new time because run aborted during first segment.")
+        return
+
+    @property
+    def segment_summary(self) -> Union[pd.DataFrame, pd.Series]:
+        """
+        Creates a summary dataframe by computing agg functions on
+        standalone (and, when multi-segment, cumulative) segment times.
+
+        Returns:
+            DataFrame with agg functions as columns and segments as rows
+        """
+
+        def make_sort_element(series: pd.Series) -> int:
+            """
+            Makes a value that characterizes where a row should be placed.
+
+            Args:
+                series: DataFrame row, containing columns "segment" & "cumulative"
+
+            Returns:
+                integer specifying where elements are sorted first by
+                their segment index and then by their value of cumulative
+            """
+            segment_element: int = self.segments.index(series.loc["segment"])
+            if "cumulative" in series.index:
+                cumulative_element: int = 0
+                cumulative: Any = series.loc["cumulative"]
+                if not pd.isna(cumulative):
+                    cumulative_element = 2 if cumulative else 1
+                return (segment_element * 3) + cumulative_element
+            else:
+                return segment_element
+
+        SORT_COLUMN: str = "SORTCOLUMNIGNORE"
+        agg_funcs: List[str] = ["min", "max", "median", "mean", "std"]
+        result: pd.DataFrame = self.times[self.segments].agg(agg_funcs).T
+        if self.is_multi_segment:
+            result["cumulative"] = False
+            result.loc[self.segments[0], "cumulative"] = pd.NA
+            result = result[["cumulative"] + agg_funcs]
+            agged_cumulative: pd.DataFrame = self.cumulative_times[self.segments[1:]]
+            agged_cumulative = agged_cumulative.agg(agg_funcs).T
+            agged_cumulative["cumulative"] = True
+            agged_cumulative = agged_cumulative[["cumulative"] + agg_funcs]
+            result = pd.concat([result, agged_cumulative])
+        result.reset_index(inplace=True)
+        result.rename(columns={"index": "segment"}, inplace=True)
+        result[SORT_COLUMN] = result.apply(make_sort_element, axis=1)
+        result.sort_values(SORT_COLUMN, inplace=True)
+        result.drop(columns=SORT_COLUMN, inplace=True)
+        if self.is_multi_segment:
+            result.set_index(["segment", "cumulative"], inplace=True)
+            return result
+        else:
+            result.set_index("segment", inplace=True)
+            return result.loc[self.segments[0]]

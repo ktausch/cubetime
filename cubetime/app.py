@@ -182,31 +182,6 @@ def time(ctx: click.Context, taskname: str, comparestyle: str) -> None:
     return
 
 
-def detailed_summary(task_index: TaskIndex, taskname: str) -> None:
-    """
-    Prints a detailed summary of a single task in the index
-
-    Args:
-        task_index: the index of tasks on disk
-        taskname: the name of the task to summarize
-    """
-    time_set: TimeSet = task_index[taskname].time_set
-    time_set.print_detailed_summary(print_func=click.echo)
-    return
-
-
-def high_level_summary(task_index: TaskIndex, tasknames: Optional[List[str]]) -> None:
-    """
-    Prints a high level summary of tasks in the index.
-
-    Args:
-        task_index: the index of tasks on disk
-        tasknames: list of tasks to summarize. if None, all tasks stored are summarized
-    """
-    task_index.print_summary(print_func=click.echo)
-    return
-
-
 @main.command()
 @taskname_option(required=False, help_suffix="summarize (if detailed summary desired)")
 @tasknames_option(required=False, help_suffix="summarize")
@@ -222,9 +197,10 @@ def summarize(
     """
     task_index: TaskIndex = ctx.obj
     if taskname is None:
-        high_level_summary(task_index=task_index, tasknames=tasknames)
+        task_index.print_summary(tasknames=tasknames, print_func=click.echo)
     elif tasknames is None:
-        detailed_summary(task_index=task_index, taskname=taskname)
+        time_set: TimeSet = task_index[taskname].time_set
+        time_set.print_detailed_summary(print_func=click.echo)
     else:
         raise ValueError("Only one of --taskname and --tasknames can be provided.")
     return

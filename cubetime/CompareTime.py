@@ -2,7 +2,7 @@ from enum import Enum
 import numpy as np
 from typing import Optional
 
-from cubetime.Config import decimal_format
+from cubetime.Utilities import TimeFormatter
 
 COLOR_DICT = {"red": 31, "yellow": 33, "green": 32, "white": 37}
 """Integers to place in terminal formatting strings for colors used in printing."""
@@ -14,6 +14,7 @@ class CompareResultDiscrete(Enum):
     WORSE = 0
     EQUAL = 1
     BETTER = 2
+
 
 class CompareResult:
     """Class storing discrete comparison and numerical comparison of times."""
@@ -40,10 +41,7 @@ class CompareResult:
         """
         if np.isnan(self.continuous):
             return ""
-        result: str = decimal_format(self.continuous)
-        if self.continuous > 0:
-            result = "+" + result
-        return f" ({result})"
+        return f" ({TimeFormatter.make_time_string(self.continuous, show_plus=True)})"
 
 
 def comparison_color(current: CompareResult, best: CompareResult) -> str:
@@ -116,9 +114,7 @@ def terminal_format(string: str, color: str, bold: bool = False) -> str:
     Returns:
         string such that when printed, shows text of parameter with given status
     """
-    return (
-        f"\033[{'1;' if bold else ''}{COLOR_DICT[color.lower()]}m{string}\033[00m"
-    )
+    return f"\033[{'1;' if bold else ''}{COLOR_DICT[color.lower()]}m{string}\033[00m"
 
 
 def compare_terminal_output(
@@ -128,7 +124,19 @@ def compare_terminal_output(
     best: CompareTime,
     min_best: bool,
 ) -> str:
-    """TODO"""
+    """
+    Creates terminal output summarizing a time and comparison.
+
+    Args:
+        segment_index: the index of the segment being compared
+        time: the newly achieved time
+        current: the comparison to make green vs. red distinctions
+        best: the comparison to make gold vs. non-gold distinctions
+        min_best: True if smaller times are better for current comparison
+
+    Returns:
+        string with raw time and time relative to comparison, colored by how it compares
+    """
     segment_compare_result: CompareResult = current.compare(
         segment_index, time, min_better=min_best
     )
@@ -138,8 +146,10 @@ def compare_terminal_output(
     segment_color: str = comparison_color(
         segment_compare_result, best_segment_compare_result
     )
+    main_string: str = TimeFormatter.make_time_string(time, show_plus=False)
+    compare_string: str = str(segment_compare_result)
     return terminal_format(
-        f"{decimal_format(time)}{str(segment_compare_result)}",
+        f"{main_string}{compare_string}",
         color=segment_color,
         bold=True,
     )

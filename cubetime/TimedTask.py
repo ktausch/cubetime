@@ -5,8 +5,6 @@ import yaml
 
 from cubetime.TimeSet import TimeSet
 
-CONSOLIDATION_THRESHOLD: int = 10
-
 
 class TimedTask:
     """

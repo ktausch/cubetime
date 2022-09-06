@@ -1,6 +1,5 @@
 import os
-import pandas as pd
-from typing import Any, Dict
+from typing import Any, Callable, Dict, Iterator
 import yaml
 
 HOME_DIRECTORY = os.environ["HOME"]
@@ -11,7 +10,7 @@ GLOBAL_CONFIG_FILENAME: str = f"{HOME_DIRECTORY}/.config/cubetime.yml"
 
 DEFAULT_GLOBAL_CONFIG: Dict[str, Any] = {
     "data_directory": f"{HOME_DIRECTORY}/.cubetime/data",
-    "num_decimal_places": 3,
+    "num_decimal_places": 1,
 }
 """Default global configuration dictionary."""
 
@@ -106,32 +105,40 @@ class _GlobalConfig:
         """
         return str(self.values)
 
+    def __iter__(self) -> Iterator:
+        """
+        Allows for use of for loop inside global config.
 
-global_config = _GlobalConfig()
-"""Static container storing global configuration options."""
+        Returns:
+            iterator over config dictionary
+        """
+        return self.values.__iter__()
+
+    def print(self, name: str = None, print_func: Callable[..., None] = print) -> None:
+        """
+        Prints the configuration.
+
+        Args:
+            name: name of the config variable to print. None if all should be printed
+            print_func: the function to use for printing
+        """
+        if name is None:
+            for name in self:
+                print_func(f"{name}: {self[name]}")
+        else:
+            if name in self:
+                print_func(f"{name}: {self[name]}")
+            else:
+                print_func(f"{name} not in cubetime config.")
+        return
 
 
-def decimal_format(number: float) -> str:
-    """
-    Formats a float using the configured number of decimal places.
+class GlobalConfig:
+    """Class allowing for static creation/access of global configuration"""
 
-    Args:
-        number: number to make a string for
+    instance: _GlobalConfig = _GlobalConfig()
+    """Static container storing global configuration settings."""
 
-    Returns:
-        string form of number using configured number of decimal places
-    """
-    return (f"{{:.{global_config['num_decimal_places']}f}}").format(number)
 
-def pandas_option_context() -> pd.option_context:
-    """
-    Creates a context in which printed data frames are customized via config.
-
-    Returns:
-        context: allows for the following
-            ```
-            with context:
-                print(dataframe)
-            ```
-    """
-    return pd.option_context("display.precision", global_config["num_decimal_places"])
+global_config: _GlobalConfig = GlobalConfig.instance
+"""Convenience variable for accessing/modifying global configuration settings"""

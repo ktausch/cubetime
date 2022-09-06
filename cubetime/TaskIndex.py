@@ -1,8 +1,15 @@
 import os
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
+
+import pandas as pd
 
 from cubetime.Config import global_config
 from cubetime.TimedTask import TimedTask
+from cubetime.TimeSet import TimeSet, TIME_AGG_FUNCS
+from cubetime.Utilities import print_pandas_dataframe
+
+SPECIAL_CHARACTERS: List[str] = [","]
+"""Characters that are not allowed in segment or task names."""
 
 
 class TaskIndex:
@@ -60,7 +67,24 @@ class TaskIndex:
             raise KeyError(
                 f'No indexed task named "{key}". Did you mean to create one first?'
             )
-        
+
+    @staticmethod
+    def check_names(*names: str) -> None:
+        """
+        Checks given strings for special characters not allowed in task/segment names.
+
+        Throws ValueError if any of the special characters appear.
+
+        Args:
+            names: task and/or segment name(s) to check
+        """
+        for name in names:
+            if any(character in name for character in SPECIAL_CHARACTERS):
+                raise ValueError(
+                    "The following characters are not allowed in "
+                    f"task or segment names, {SPECIAL_CHARACTERS}."
+                )
+        return
 
     def new_timed_task(
         self,
@@ -83,6 +107,7 @@ class TaskIndex:
         """
         if name in self.timed_tasks:
             raise ValueError("Cannot add two timed tasks with the same name.")
+        self.check_names(name, *segments)
         if leaf_directory is None:
             leaf_directory = "".join(c if c.isalnum() else "_" for c in name)
         directory = os.path.join(self.data_directory, leaf_directory)
@@ -99,3 +124,25 @@ class TaskIndex:
         self.timed_tasks[name] = new_task
         new_task.save()
         return new_task
+
+    def print_summary(
+        self, tasknames: str = None, print_func: Callable[..., None] = print
+    ) -> None:
+        """
+        Prints a summary of one or more tasks.
+
+        Args:
+            tasknames: comma separated list of tasks to print (or None for all tasks)
+            print_func: function to use for printing
+        """
+        task_names: List[str] = self.task_names
+        if tasknames is not None:
+            task_names = tasknames.split(",")
+        summary: pd.DataFrame = pd.DataFrame()
+        for name in task_names:
+            time_set: TimeSet = self[name].time_set
+            summary[name] = time_set.cumulative_summary.loc[time_set.segments[-1]]
+        print_func()
+        print_pandas_dataframe(summary, time_rows=TIME_AGG_FUNCS, print_func=print_func)
+        print_func()
+        return

@@ -1,8 +1,7 @@
-from xml.sax.handler import property_declaration_handler
 import click
 from datetime import datetime
 import time
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from typing_extensions import Self
 
 import numpy as np
@@ -10,10 +9,14 @@ import pandas as pd
 
 from cubetime.CompareStyle import CompareStyle
 from cubetime.CompareTime import CompareTime, compare_terminal_output
-from cubetime.Config import decimal_format
+from cubetime.Utilities import print_pandas_dataframe
 
 DATE_COLUMN: str = "date"
 """Name of the date column in the dataframes"""
+SINGLETON_SEGMENT_COLUMN = "complete"
+"""Name of single segment in single segment tasks with no custom segment name."""
+AGG_FUNCS: List[str] = ["min", "median", "max", "mean", "std", "sum", "count"]
+TIME_AGG_FUNCS: List[str] = [f for f in AGG_FUNCS if f not in ["count"]]
 
 
 class TimeSet:
@@ -78,11 +81,11 @@ class TimeSet:
 
         Args:
             segments: string names of segments of run.
-                If None, segments set to ["total"]
+                If None, segments set to [SINGLETON_SEGMENT_COLUMN]
             min_best: if True, minimum times are considered best, otherwise maximum used
         """
         if segments is None:
-            segments = ["total"]
+            segments = [SINGLETON_SEGMENT_COLUMN]
         columns = [DATE_COLUMN] + segments
         frame = pd.DataFrame(columns=columns)
         return cls(frame, copy=False, min_best=min_best)
@@ -148,8 +151,8 @@ class TimeSet:
         """
         Checks the times DataFrame is valid and assembles lists of segments.
 
-        Ensures that the date column and total column are included
-        in the columns of DataFrame (throws ValueError otherwise).
+        Ensures that the date and segment columns are included in
+        the columns of DataFrame (throws ValueError otherwise).
 
         Returns:
             list of string names of segments
@@ -384,6 +387,25 @@ class TimeSet:
         times: np.ndarray = self.times[self.segments].loc[which].values
         return self.make_compare_times_from_segment_times(times)
 
+    def make_balanced_best_compare_times(self) -> Tuple[CompareTime, CompareTime]:
+        """
+        Makes the compare times to use for balanced best, which splits the
+        time save left from the best run into equal amounts per segment.
+
+        Returns:
+            (segment_comparison, cumulative_comparison)
+                segment_comparison: compare times for standalone segments
+                cumulative_comparison: compare times for cumulative segments
+        """
+        best_run_times: np.ndarray = (
+            self.times[self.segments].iloc[self.best_run_index].values
+        )
+        best_segment_times: np.ndarray = self.best_times.values
+        time_saves: np.ndarray = best_run_times - best_segment_times
+        balanced_time_save_per_segment: float = np.sum(time_saves) / self.num_segments
+        balanced_times: np.ndarray = best_segment_times + balanced_time_save_per_segment
+        return self.make_compare_times_from_segment_times(balanced_times)
+
     def make_compare_times(
         self, compare_style: CompareStyle
     ) -> Tuple[CompareTime, CompareTime]:
@@ -412,6 +434,8 @@ class TimeSet:
             return self.make_compare_times_from_segment_times(self.average_times.values)
         elif compare_style == CompareStyle.WORST_SEGMENTS:
             return self.make_compare_times_from_segment_times(self.worst_times.values)
+        elif compare_style == CompareStyle.BALANCED_BEST:
+            return self.make_balanced_best_compare_times()
         else:
             return CompareTime(None), CompareTime(None)
 
@@ -451,9 +475,7 @@ class TimeSet:
             prompt_message: str = f"Finish {self.segments[segment_index]}"
             try:
                 prompt_input: str = click.prompt(
-                    prompt_message,
-                    default="",
-                    show_default=False
+                    prompt_message, default="", show_default=False
                 )
                 if prompt_input.lower() == "abort":
                     break
@@ -519,10 +541,10 @@ class TimeSet:
         return
 
     @property
-    def segment_summary(self) -> Union[pd.DataFrame, pd.Series]:
+    def standalone_summary(self) -> pd.DataFrame:
         """
-        Creates a summary dataframe by computing agg functions on
-        standalone (and, when multi-segment, cumulative) segment times.
+        Creates a summary dataframe by computing agg
+        functions on standalone segment times.
 
         Returns:
             DataFrame with agg functions as columns and segments as rows
@@ -533,42 +555,88 @@ class TimeSet:
             Makes a value that characterizes where a row should be placed.
 
             Args:
-                series: DataFrame row, containing columns "segment" & "cumulative"
+                series: DataFrame row, containing column "segment"
 
             Returns:
                 integer specifying where elements are sorted first by
                 their segment index and then by their value of cumulative
             """
-            segment_element: int = self.segments.index(series.loc["segment"])
-            if "cumulative" in series.index:
-                cumulative_element: int = 0
-                cumulative: Any = series.loc["cumulative"]
-                if not pd.isna(cumulative):
-                    cumulative_element = 2 if cumulative else 1
-                return (segment_element * 3) + cumulative_element
+            segment: str = series.loc["segment"]
+            if segment == "total":
+                return self.num_segments
             else:
-                return segment_element
+                return self.segments.index(segment)
 
         SORT_COLUMN: str = "SORTCOLUMNIGNORE"
-        agg_funcs: List[str] = ["min", "max", "median", "mean", "std"]
-        result: pd.DataFrame = self.times[self.segments].agg(agg_funcs).T
+        result: pd.DataFrame = self.times[self.segments].agg(AGG_FUNCS)
         if self.is_multi_segment:
-            result["cumulative"] = False
-            result.loc[self.segments[0], "cumulative"] = pd.NA
-            result = result[["cumulative"] + agg_funcs]
-            agged_cumulative: pd.DataFrame = self.cumulative_times[self.segments[1:]]
-            agged_cumulative = agged_cumulative.agg(agg_funcs).T
-            agged_cumulative["cumulative"] = True
-            agged_cumulative = agged_cumulative[["cumulative"] + agg_funcs]
-            result = pd.concat([result, agged_cumulative])
+            result["total"] = result.apply("sum", axis=1)
+            # variance, not standard deviation, is additive
+            result.loc["std", "total"] = np.sqrt(
+                np.sum(result.loc["std", self.segments].values ** 2)
+            )
+            # count don't have meaningful sums over segments
+            result.loc["count", "total"] = result.loc["count", self.segments[-1]]
+        result = result.T
         result.reset_index(inplace=True)
         result.rename(columns={"index": "segment"}, inplace=True)
         result[SORT_COLUMN] = result.apply(make_sort_element, axis=1)
         result.sort_values(SORT_COLUMN, inplace=True)
         result.drop(columns=SORT_COLUMN, inplace=True)
+        result.set_index("segment", inplace=True)
+        return result
+
+    @property
+    def cumulative_summary(self) -> Optional[pd.DataFrame]:
+        """
+        Creates a summary dataframe by computing agg
+        functions on cumulative segment times.
+
+        Returns:
+            DataFrame with agg functions as columns and segments as rows
+        """
+
+        def make_sort_element(series: pd.Series) -> int:
+            """
+            Makes a value that characterizes where a row should be placed.
+
+            Args:
+                series: DataFrame row, containing column "segment"
+
+            Returns:
+                integer specifying where elements are sorted first by
+                their segment index and then by their value of cumulative
+            """
+            return self.segments.index(series.loc["segment"])
+
+        SORT_COLUMN: str = "SORTCOLUMNIGNORE"
+        result: pd.DataFrame = self.cumulative_times[self.segments].agg(AGG_FUNCS).T
+        # sum & count of cumulative times is not meaningful except for the final segment
+        result.loc[self.segments[:-1], ["sum", "count"]] = np.nan
+        result.reset_index(inplace=True)
+        result.rename(columns={"index": "segment"}, inplace=True)
+        result[SORT_COLUMN] = result.apply(make_sort_element, axis=1)
+        result.sort_values(SORT_COLUMN, inplace=True)
+        result.drop(columns=SORT_COLUMN, inplace=True)
+        result.set_index("segment", inplace=True)
+        return result
+
+    def print_detailed_summary(self, print_func: Callable[..., None] = print) -> None:
+        """
+        Prints a detailed summary of the data stored in this object.
+
+        Shows everything from standalone_summary (+ cumulative_summary if multi-segment)
+
+        Args:
+            print_func: function to use to print
+        """
+        kwargs: Dict = {"time_columns": TIME_AGG_FUNCS, "print_func": print_func}
+        print_func()
         if self.is_multi_segment:
-            result.set_index(["segment", "cumulative"], inplace=True)
-            return result
-        else:
-            result.set_index("segment", inplace=True)
-            return result.loc[self.segments[0]]
+            print_func("Standalone summary:\n")
+        print_pandas_dataframe(self.standalone_summary, **kwargs)
+        if self.is_multi_segment:
+            print_func("\n\nCumulative summary:\n")
+            print_pandas_dataframe(self.cumulative_summary, **kwargs)
+        print_func()
+        return

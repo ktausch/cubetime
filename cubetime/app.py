@@ -137,7 +137,7 @@ def parse_min_best() -> bool:
 @click.pass_context
 def main(ctx: click.Context):
     """
-    Command that runs before all sub-commands.
+    Multi-segment timing program.
     """
     ctx.obj = TaskIndex()
 
@@ -175,7 +175,8 @@ def add_new_task(ctx: click.Context, taskname: str) -> None:
 @click.pass_context
 def time(ctx: click.Context, taskname: str, comparestyle: str) -> None:
     """
-    Interactively times a run of the given task.
+    Interactively times a run of the given task. Asks
+    user to hit enter at beginning/end of all splits.
     """
     task_index: TaskIndex = ctx.obj
     task_index[taskname].time(compare_style=CompareStyle.__members__[comparestyle])
@@ -220,7 +221,7 @@ def histogram(
     segments: List[str] = None,
 ) -> None:
     """
-    Makes histograms of one task or one or more segments of a task.
+    Plots distribution of times.
     """
     fontsize: int = 12
     task_index: TaskIndex = ctx.obj
@@ -272,7 +273,7 @@ def scatter(
     segments: List[str] = None,
 ) -> None:
     """
-    Plot times of one task or one or more segments of a task against time.
+    Plot times against completion number.
     """
     fontsize: int = 12
     task_index: TaskIndex = ctx.obj

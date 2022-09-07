@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Set
 from typing_extensions import Self
 import yaml
 
@@ -17,6 +17,7 @@ class TimedTask:
         directory: str,
         segments: List[str],
         min_best: bool,
+        aliases: Set[str] = None,
     ):
         """
         Creates a new task given its name, location, and segment info
@@ -32,6 +33,7 @@ class TimedTask:
         self.segments: List[str] = segments
         self.min_best: bool = min_best
         self._time_set: Optional[TimeSet] = None
+        self.aliases: Set[str] = set() if aliases is None else aliases
 
     @property
     def data_file_name(self) -> str:
@@ -109,9 +111,37 @@ class TimedTask:
             "name": self.name,
             "segments": self.segments,
             "min_best": self.min_best,
+            "aliases": self.aliases,
         }
         with open(self.config_filename, "w") as file:
             yaml.dump(to_dump, file)
+        return
+
+    def add_alias(self, alias: str) -> None:
+        """
+        Adds an alias of this task.
+
+        Throws a ValueError if the alias is the same as the name
+
+        Args:
+            alias: alternate string that can be used to refer to this task
+        """
+        if alias == self.name:
+            raise ValueError("Task alias cannot be identical to name.")
+        self.aliases.add(alias)
+        self.save()
+        return
+
+    def remove_alias(self, alias: str) -> None:
+        """
+        Removes an alias.
+
+        Throws KeyError if alias does not exist.
+
+        Args:
+            alias: the alias to remove
+        """
+        self.aliases.remove(alias)
         return
 
     def time(self, *args, **kwargs) -> None:
@@ -120,4 +150,27 @@ class TimedTask:
         """
         self.time_set.time(*args, **kwargs)
         self.time_set.save(self.data_file_name)
+        return
+
+    @property
+    def name_summary(self) -> str:
+        """
+        Summarizes the name and aliases of this task
+
+        Returns:
+            a summary of the naming of this task. Contains name and aliases.
+        """
+        return f"Task name: {self.name}\nAliases: {sorted(self.aliases)}"
+
+    def print_detailed_summary(self, print_func: Callable[..., None] = print) -> None:
+        """
+        Prints a detailed summary of the data stored in this object.
+
+        Shows everything from standalone_summary (+ cumulative_summary if multi-segment)
+
+        Args:
+            print_func: function to use to print
+        """
+        print_func(f"\n{self.name_summary}")
+        self.time_set.print_detailed_summary(print_func=print_func)
         return

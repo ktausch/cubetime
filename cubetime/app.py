@@ -1,4 +1,5 @@
 import click
+from enum import Enum
 import matplotlib.pyplot as pl
 import numpy as np
 from typing import Any, Dict, List, Optional
@@ -7,9 +8,10 @@ from cubetime.CompareStyle import CompareStyle, compare_style_option
 from cubetime.Config import global_config
 from cubetime.TaskIndex import TaskIndex
 from cubetime.TimeSet import TimeSet
+from cubetime.TimedTask import TimedTask
 
 
-def taskname_option(required: bool, help_suffix: str):
+def taskname_option(required: bool, help_suffix: str, allow_alias: bool):
     """
     Creates option decorator for taskname argument.
 
@@ -22,56 +24,47 @@ def taskname_option(required: bool, help_suffix: str):
     """
     return click.option(
         "--taskname",
+        "-t",
         prompt=False,
         required=required,
         type=str,
-        help=f"single task name to {help_suffix}",
+        help=f"single task name{' (or alias)' if allow_alias else ''} to {help_suffix}",
     )
 
 
-def tasknames_option(required: bool, help_suffix: str):
+def string_list_option(
+    option_name: str,
+    description: str,
+    required: bool,
+    help_suffix: str,
+    letter: str = None,
+):
     """
-    Creates option decorator for tasknames argument.
+    Creates an option that should be interpreted as a comma-separated list of strings.
 
     Args:
-        required: True if tasknames is necessary
-        help_suffix: help message is f"comma-separated task name(s) to {help_suffix}"
+        option_name: the name to specify the option in the terminal
+        description: few-words description of what is in the list
+        required: True if the option must be provided for command to work
+        help_suffix: string to put after "comma-separated {description} to " in help
 
     Returns:
         click option decorator
     """
     return click.option(
-        "--tasknames",
-        prompt=False,
-        required=required,
-        type=str,
-        help=f"comma-separated task name(s) to {help_suffix}",
-    )
-
-
-def segments_option(required: bool, help_suffix: str):
-    """
-    Creates option decorator for segments argument.
-
-    Args:
-        required: True if segments is necessary
-        help_suffix: help message is f"comma-separated segment name(s) to {help_suffix}"
-
-    Returns:
-        click option decorator
-    """
-    return click.option(
-        "--segments",
+        f"--{option_name}",
+        f"-{option_name[0] if letter is None else letter}",
         prompt=False,
         required=required,
         type=str,
         callback=(lambda ctx, param, s: None if s is None else s.split(",")),
-        help=f"comma-separated segment name(s) to {help_suffix}",
+        help=f"comma-separated {description} to {help_suffix}",
     )
 
 
 all_segments_option = click.option(
     "--all_segments",
+    "-a",
     default=False,
     is_flag=True,
     help="if given, all segments plotted (overrides --segments)",
@@ -80,6 +73,7 @@ all_segments_option = click.option(
 
 cumulative_segments_option = click.option(
     "--cumulative_segments",
+    "-c",
     default=False,
     is_flag=True,
     help=(
@@ -143,22 +137,14 @@ def main(ctx: click.Context):
 
 
 @main.command()
+@taskname_option(required=True, help_suffix="create", allow_alias=False)
+@string_list_option(
+    "aliases", "alias(es)", required=False, help_suffix="use to refer to new task"
+)
 @click.pass_context
-def list_tasks(ctx: click.Context) -> None:
+def create(ctx: click.Context, taskname: str, aliases: List[str] = None) -> None:
     """
-    Lists all tasks stored in the index.
-    """
-    task_index: TaskIndex = ctx.obj
-    click.echo(task_index.task_names)
-    return
-
-
-@main.command()
-@taskname_option(required=True, help_suffix="create")
-@click.pass_context
-def add_new_task(ctx: click.Context, taskname: str) -> None:
-    """
-    Adds a new task to the idex of all tasks.
+    Creates a new task and adds it to the index of all tasks.
     """
     task_index: TaskIndex = ctx.obj
     task_index.new_timed_task(
@@ -166,11 +152,40 @@ def add_new_task(ctx: click.Context, taskname: str) -> None:
         segments=parse_segments(),
         leaf_directory=parse_directory(),
         min_best=parse_min_best(),
+        aliases=aliases,
     )
+    return
 
 
 @main.command()
-@taskname_option(required=True, help_suffix="time")
+@taskname_option(required=True, help_suffix="add alias(es) for", allow_alias=True)
+@string_list_option(
+    "aliases", "alias(es)", required=True, help_suffix="use to refer to task"
+)
+@click.pass_context
+def add_alias(ctx: click.Context, taskname: str, aliases: List[str]) -> None:
+    """
+    Adds alias(es) to a task.
+    """
+    task_index: TaskIndex = ctx.obj
+    task_index.add_aliases(taskname, aliases)
+    return
+
+
+@main.command()
+@string_list_option("aliases", "alias(es)", required=True, help_suffix="to remove")
+@click.pass_context
+def remove_alias(ctx: click.Context, aliases: List[str]) -> None:
+    """
+    Removes aliases from the task index.
+    """
+    task_index: TaskIndex = ctx.obj
+    task_index.remove_aliases(aliases)
+    return
+
+
+@main.command()
+@taskname_option(required=True, help_suffix="time", allow_alias=True)
 @compare_style_option(default=CompareStyle.BEST_RUN)
 @click.pass_context
 def time(ctx: click.Context, taskname: str, comparestyle: str) -> None:
@@ -184,8 +199,18 @@ def time(ctx: click.Context, taskname: str, comparestyle: str) -> None:
 
 
 @main.command()
-@taskname_option(required=False, help_suffix="summarize (if detailed summary desired)")
-@tasknames_option(required=False, help_suffix="summarize")
+@taskname_option(
+    required=False,
+    help_suffix="summarize (if detailed summary desired)",
+    allow_alias=True,
+)
+@string_list_option(
+    "tasknames",
+    "task name(s) or alias(es)",
+    required=False,
+    help_suffix="summarize",
+    letter='s',
+)
 @click.pass_context
 def summarize(
     ctx: click.Context, taskname: str = None, tasknames: List[str] = None
@@ -200,18 +225,22 @@ def summarize(
     if taskname is None:
         task_index.print_summary(tasknames=tasknames, print_func=click.echo)
     elif tasknames is None:
-        time_set: TimeSet = task_index[taskname].time_set
-        time_set.print_detailed_summary(print_func=click.echo)
+        timed_task: TimedTask = task_index[taskname]
+        timed_task.print_detailed_summary(print_func=click.echo)
     else:
-        raise ValueError("Only one of --taskname and --tasknames can be provided.")
+        raise click.UsageError(
+            "Only one of --taskname and --tasknames can be provided."
+        )
     return
 
 
 @main.command()
-@taskname_option(required=True, help_suffix="make histogram(s) for")
+@taskname_option(required=True, help_suffix="make histogram(s) for", allow_alias=True)
 @all_segments_option
 @cumulative_segments_option
-@segments_option(required=False, help_suffix="make histogram(s) of")
+@string_list_option(
+    "segments", "segment name(s)", required=False, help_suffix="make histogram(s) of"
+)
 @click.pass_context
 def histogram(
     ctx: click.Context,
@@ -260,10 +289,15 @@ def histogram(
 
 
 @main.command()
-@taskname_option(required=True, help_suffix="make scatter plot for")
+@taskname_option(required=True, help_suffix="make scatter plot for", allow_alias=True)
 @all_segments_option
 @cumulative_segments_option
-@segments_option(required=False, help_suffix="make scatter plot(s) for")
+@string_list_option(
+    "segments",
+    "segment name(s)",
+    required=False,
+    help_suffix="make scatter plot(s) for"
+)
 @click.pass_context
 def scatter(
     ctx: click.Context,
@@ -312,40 +346,53 @@ def scatter(
     return
 
 
-@main.command()
-@click.option("--name", required=False, type=str, help="config variable name")
-def print_config(name: str = None) -> None:
+@main.command(name="list")
+@click.pass_context
+def list_command(ctx: click.Context) -> None:
     """
-    Prints the configuration settings of cubetime.
+    Lists all names and aliases of stored tasks.
     """
-    global_config.print(name=name, print_func=click.echo)
+    task_index: TaskIndex = ctx.obj
+    click.echo(f"\n{task_index.alias_summary}\n")
     return
 
 
 @main.command()
-@click.option("--name", required=True, type=str, help="config variable name")
-@click.option("--value", required=True, type=str, help="config variable value")
-def update_config(name: str, value: str) -> None:
+@click.option("--name", "-n", required=False, type=str, help="config variable name")
+@click.option("--value", "-v", required=False, type=str, help="config variable value")
+def config(name: str = None, value: str = None) -> None:
     """
-    Updates config with the given value. Only bools, ints, and strings supported.
+    Lists or edits the configuration settings of cubetime.
+
+    If no options are given, the full config is printed. If a name is given but no value
+    is given, then the config variable with that name is printed alongside its value. If
+    both a name and a value are given, then this command edits the global config file
+    (after confirmation from user).
     """
-    formatted: Any = value
-    if value.lower() == "true":
-        formatted = True
-    elif value.lower() == "false":
-        formatted = False
-    elif value.isnumeric():
-        formatted = int(value)
-    confirmation_message: str = f"Should it be added with value {formatted}?"
-    if name in global_config:
-        confirmation_message = (
-            f"{name} exists already in cubetime config "
-            f"(value={global_config[name]}). {confirmation_message}"
-        )
+    if value is None:
+        global_config.print(name=name, print_func=click.echo)
+    elif name is None:
+        raise click.UsageError("--value can only be given if --name is given")
     else:
-        confirmation_message = f"{name} not in cubetime config. {confirmation_message}"
-    if click.confirm(confirmation_message):
-        global_config[name] = formatted
+        formatted: Any = value
+        if value.lower() == "true":
+            formatted = True
+        elif value.lower() == "false":
+            formatted = False
+        elif value.isnumeric():
+            formatted = int(value)
+        confirmation_message: str = f"Should it be added with value {formatted}?"
+        if name in global_config:
+            confirmation_message = (
+                f"{name} exists already in cubetime config "
+                f"(value={global_config[name]}). {confirmation_message}"
+            )
+        else:
+            confirmation_message = (
+                f"{name} not in cubetime config. {confirmation_message}"
+            )
+        if click.confirm(confirmation_message):
+            global_config[name] = formatted
     return
 
 

@@ -48,25 +48,29 @@ class PlotType(Enum):
             ax.scatter(1 + np.arange(len(times)), times, **kwargs)
         return
 
-    @property
-    def xlabel(self) -> str:
+    def make_xlabel(self, cumulative: bool) -> str:
         """
         Makes the label for the x-axis.
+
+        Args:
+            cumulative: True if cumulative times are being plotted, False if standalone
 
         Returns:
             label for x axis of plot
         """
         label: str = ""
         if self == PlotType.HISTOGRAM:
-            label = "completion time [s]"
+            label = f"{'cumulative ' if cumulative else ''}completion time [s]"
         elif self == PlotType.SCATTER:
             label = "completion #"
         return label
 
-    @property
-    def ylabel(self) -> str:
+    def make_ylabel(self, cumulative: bool) -> str:
         """
         Makes the label for the y-axis.
+
+        Args:
+            cumulative: True if cumulative times are being plotted, False if standalone
 
         Returns:
             label for y axis of plot
@@ -75,7 +79,7 @@ class PlotType(Enum):
         if self == PlotType.HISTOGRAM:
             label = "# of occurrences"
         elif self == PlotType.SCATTER:
-            label = "completion time [s]"
+            label = f"{'cumulative' if cumulative else ''}completion time [s]"
         return label
 
     def make_title(
@@ -155,7 +159,7 @@ class TimePlotter:
             for segment in segments:
                 self.segments.append((time_set.segments.index(segment), segment))
             self.times = time_set.cumulative_times if cumulative else time_set.times
-        self.cumulative: bool = cumulative
+        self.cumulative: bool = cumulative and (segments is not None)
 
     def plot(self, plot_type: PlotType, **extra_kwargs) -> None:
         """
@@ -182,8 +186,8 @@ class TimePlotter:
             taskname=self.name, segments=self.segments, cumulative=self.cumulative
         )
         ax.set_title(title, size=fontsize)
-        ax.set_xlabel(plot_type.xlabel, size=fontsize)
-        ax.set_ylabel(plot_type.ylabel, size=fontsize)
+        ax.set_xlabel(plot_type.make_xlabel(cumulative=self.cumulative), size=fontsize)
+        ax.set_ylabel(plot_type.make_ylabel(cumulative=self.cumulative), size=fontsize)
         ax.tick_params(labelsize=fontsize, width=2.5, length=7.5, which="major")
         ax.tick_params(width=1.5, length=4.5, which="minor")
         fig.tight_layout()

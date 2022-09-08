@@ -1,4 +1,5 @@
 import os
+import shutil
 from typing import Any, Callable, Dict, List, Optional, Set
 from typing_extensions import Self
 import yaml
@@ -174,3 +175,7 @@ class TimedTask:
         print_func(f"\n{self.name_summary}")
         self.time_set.print_detailed_summary(print_func=print_func)
         return
+
+    def delete(self):
+        """Deletes this task from disk."""
+        shutil.rmtree(self.directory)

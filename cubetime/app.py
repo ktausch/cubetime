@@ -1,11 +1,9 @@
 import click
-from enum import Enum
-import matplotlib.pyplot as pl
-import numpy as np
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from cubetime.CompareStyle import CompareStyle, compare_style_option
 from cubetime.Config import global_config
+from cubetime.Plotting import plot_type_option, PlotType, TimePlotter
 from cubetime.TaskIndex import TaskIndex
 from cubetime.TimeSet import TimeSet
 from cubetime.TimedTask import TimedTask
@@ -158,6 +156,21 @@ def create(ctx: click.Context, taskname: str, aliases: List[str] = None) -> None
 
 
 @main.command()
+@taskname_option(required=True, help_suffix="delete", allow_alias=False)
+@click.option("--force", is_flag=True, default=False, help="skip confirmation message")
+@click.pass_context
+def delete(ctx: click.Context, taskname: str, force: bool) -> None:
+    """
+    Deletes the task with the given name.
+    """
+    task_index: TaskIndex = ctx.obj
+    if taskname in task_index.task_names:
+        if force or click.confirm(f"Are you sure you'd like to delete {taskname}?"):
+            task_index.delete(taskname)
+    return
+
+
+@main.command()
 @taskname_option(required=True, help_suffix="add alias(es) for", allow_alias=True)
 @string_list_option(
     "aliases", "alias(es)", required=True, help_suffix="use to refer to task"
@@ -188,13 +201,13 @@ def remove_alias(ctx: click.Context, aliases: List[str]) -> None:
 @taskname_option(required=True, help_suffix="time", allow_alias=True)
 @compare_style_option(default=CompareStyle.BEST_RUN)
 @click.pass_context
-def time(ctx: click.Context, taskname: str, comparestyle: str) -> None:
+def time(ctx: click.Context, taskname: str, compare_style: CompareStyle) -> None:
     """
     Interactively times a run of the given task. Asks
     user to hit enter at beginning/end of all splits.
     """
     task_index: TaskIndex = ctx.obj
-    task_index[taskname].time(compare_style=CompareStyle.__members__[comparestyle])
+    task_index[taskname].time(compare_style=compare_style)
     return
 
 
@@ -238,111 +251,35 @@ def summarize(
 @taskname_option(required=True, help_suffix="make histogram(s) for", allow_alias=True)
 @all_segments_option
 @cumulative_segments_option
+@plot_type_option(default=PlotType.HISTOGRAM)
 @string_list_option(
     "segments", "segment name(s)", required=False, help_suffix="make histogram(s) of"
 )
 @click.pass_context
-def histogram(
+def plot(
     ctx: click.Context,
     taskname: str,
     all_segments: bool,
     cumulative_segments: bool,
+    plot_type: PlotType,
     segments: List[str] = None,
 ) -> None:
     """
     Plots distribution of times.
-    """
-    fontsize: int = 12
-    task_index: TaskIndex = ctx.obj
-    time_set: TimeSet = task_index[taskname].time_set
-    fig = pl.figure(figsize=(12, 9))
-    ax = fig.add_subplot(111)
-    kwargs: Dict = dict(histtype="step", linewidth=3)
-    if all_segments and time_set.is_multi_segment:
-        segments = time_set.segments
-    if segments is None:
-        ax.hist(time_set.cumulative_times[time_set.segments[-1]], **kwargs)
-        ax.set_xlabel(f"{taskname} completion time [s]", size=fontsize)
-        ax.set_title(f"{taskname} time distribution", size=fontsize)
-    else:
-        for segment in segments:
-            kwargs["label"] = f"{1 + time_set.segments.index(segment)}. {segment}"
-            if cumulative_segments:
-                ax.hist(time_set.cumulative_times[segment], **kwargs)
-            else:
-                ax.hist(time_set.times[segment], **kwargs)
-        title: str = "Cumulative " if cumulative_segments else ""
-        if len(segments) > 1:
-            ax.legend(fontsize=fontsize)
-            ax.set_xlabel("Segment length [s]", size=fontsize)
-            title = f"{title}segment time distribution, {taskname}"
-        else:
-            ax.set_xlabel(f"{segments[0]} length [s]", size=fontsize)
-            title = f"{title}{segments[0]} time distribution, {taskname}"
-        ax.set_title(title, size=fontsize)
-    ax.set_ylabel("# of occurrences", size=fontsize)
-    ax.tick_params(labelsize=fontsize, width=2.5, length=7.5, which="major")
-    ax.tick_params(width=1.5, length=4.5, which="minor")
-    fig.tight_layout()
-    pl.show()
-    return
 
-
-@main.command()
-@taskname_option(required=True, help_suffix="make scatter plot for", allow_alias=True)
-@all_segments_option
-@cumulative_segments_option
-@string_list_option(
-    "segments",
-    "segment name(s)",
-    required=False,
-    help_suffix="make scatter plot(s) for"
-)
-@click.pass_context
-def scatter(
-    ctx: click.Context,
-    taskname: str,
-    all_segments: bool,
-    cumulative_segments: bool,
-    segments: List[str] = None,
-) -> None:
+    Can plot either histograms or scatter plots (against completion index) of times.
     """
-    Plot times against completion number.
-    """
-    fontsize: int = 12
     task_index: TaskIndex = ctx.obj
-    time_set: TimeSet = task_index[taskname].time_set
-    x_values: np.ndarray = 1 + np.arange(len(time_set))
-    fig = pl.figure(figsize=(12, 9))
-    ax = fig.add_subplot(111)
-    kwargs: Dict = dict(s=12)
-    if all_segments:
+    timed_task: TimedTask = task_index[taskname]
+    time_set: TimeSet = timed_task.time_set
+    if not time_set.is_multi_segment:
+        segments = None
+    elif all_segments:
         segments = time_set.segments
-    if segments is None:
-        ax.scatter(x_values, time_set.cumulative_times[time_set.segments[-1]], **kwargs)
-        ax.set_ylabel(f"{taskname} completion time", size=fontsize)
-        ax.set_title(f"{taskname} time progression", size=fontsize)
-    else:
-        for segment in segments:
-            kwargs["label"] = f"{1 + time_set.segments.index(segment)}. {segment}"
-            if cumulative_segments:
-                ax.scatter(x_values, time_set.cumulative_times[segment], **kwargs)
-            else:
-                ax.scatter(x_values, time_set.times[segment], **kwargs)
-        title: str = "Cumulative " if cumulative_segments else ""
-        if len(segments) > 1:
-            ax.legend(fontsize=fontsize)
-            ax.set_ylabel("Segment completion time [s]", size=fontsize)
-            title = f"{title}segment time progression, {taskname}"
-        else:
-            ax.set_ylabel(f"{title}{segments[0]} completion time [s]", size=fontsize)
-            title = f"{title}{segments[0]} time progression, {taskname}"
-        ax.set_title(title, size=fontsize)
-    ax.set_xlabel("completion #", size=fontsize)
-    ax.tick_params(labelsize=fontsize, width=2.5, length=7.5, which="major")
-    ax.tick_params(width=1.5, length=4.5, which="minor")
-    fig.tight_layout()
-    pl.show()
+    plotter = TimePlotter(
+        timed_task=timed_task, segments=segments, cumulative=cumulative_segments
+    )
+    plotter.plot(plot_type)
     return
 
 

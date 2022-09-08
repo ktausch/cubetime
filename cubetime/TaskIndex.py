@@ -266,3 +266,21 @@ class TaskIndex:
                 "because they are names, not aliases"
             )
         return
+
+    def delete(self, name: str) -> None:
+        """
+        Deletes the task with the given name.
+
+        Args:
+            name: the string name of the task to delete (aliases not allowed!)
+        """
+        timed_task: TimedTask = self[name]
+        if name != timed_task.name:
+            raise ValueError(
+                f"Cannot delete a task by alias. Use the full name ({timed_task.name})."
+            )
+        self.alias_dictionary.pop(timed_task.name)
+        for alias in timed_task.aliases:
+            self.alias_dictionary.pop(alias)
+        timed_task.delete()
+        return

@@ -39,10 +39,11 @@ def compare_style_option(default: CompareStyle) -> Callable[[Callable], Callable
         click option decorator
     """
     return click.option(
-        "--comparestyle",
-        prompt="Enter compare style",
+        "--compare_style",
+        "-c",
         type=click.Choice(CompareStyle.__members__, case_sensitive=False),
         show_choices=True,
         default=default.name,
-        required=True,
+        show_default=True,
+        callback=(lambda ctx, param, style: CompareStyle.__members__[style]),
     )

@@ -1,4 +1,3 @@
-import click
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -114,28 +113,6 @@ class PlotType(Enum):
         return title
 
 
-def plot_type_option(default: PlotType):
-    """
-    Creates an option decorator for the plot type enum.
-
-    Args:
-        default: default type of plot
-
-    Returns:
-        click option decorator
-    """
-    return click.option(
-        "--plot_type",
-        "-p",
-        type=click.Choice(PlotType.__members__, case_sensitive=False),
-        show_choices=True,
-        default=default.name,
-        show_default=True,
-        callback=(lambda ctx, param, name: PlotType.__members__[name]),
-        help="Type of plot to make",
-    )
-
-
 class TimePlotter:
     """Class that can produces plots of any PlotType from a given set of data."""
 
@@ -193,3 +170,43 @@ class TimePlotter:
         fig.tight_layout()
         pl.show()
         return
+
+def plot_correlations(
+    timed_task: TimedTask, segments: List[str] = None, **kwargs
+) -> None:
+    """
+    Plots the correlations between segment completion times of a task.
+
+    Args:
+        timed_task: the task whose segment times are being analyzed
+        segments: the segments to plot (or None if all segments should be plotted)
+        **kwargs: extra kwargs to pass to matplotlib.pyplot.imshow
+    """
+    fontsize: int = 12
+    taskname = timed_task.name
+    time_set = timed_task.time_set
+    segments = time_set.segments if segments is None else segments
+    correlation: np.ndarray = time_set.correlations(segments=segments).values
+    num_segments: int = time_set.num_segments if segments is None else len(segments)
+    fig = pl.figure(figsize=(12, 9))
+    ax = fig.add_subplot(111)
+    single_dim_extent: Tuple[float, float] = (-0.5, num_segments - 0.5)
+    extent = single_dim_extent + single_dim_extent[-1::-1]
+    kwargs.update(
+        dict(interpolation="none", extent=extent, vmin=-1, vmax=1, cmap="seismic")
+    )
+    image = ax.imshow(correlation, **kwargs)
+    colorbar = pl.colorbar(image, ax=ax)
+    ax.set_xlabel("segment", size=fontsize)
+    ax.set_ylabel("segment", size=fontsize)
+    ax.set_title(f"{taskname} segment time correlations", size=fontsize)
+    ticks = np.arange(num_segments)
+    ax.set_xticks(ticks)
+    ax.set_xticklabels(segments)
+    ax.set_yticks(ticks)
+    ax.set_yticklabels(segments)
+    ax.tick_params(labelsize=fontsize, width=2.5, length=7.5)
+    colorbar.ax.tick_params(labelsize=fontsize, width=2.5, length=7.5)
+    fig.tight_layout()
+    pl.show()
+    return

@@ -179,3 +179,4 @@ class TimedTask:
     def delete(self):
         """Deletes this task from disk."""
         shutil.rmtree(self.directory)
+        return

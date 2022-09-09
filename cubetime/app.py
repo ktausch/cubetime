@@ -1,128 +1,23 @@
 import click
-from typing import Any, List, Optional
+from typing import Any, List
 
-from cubetime.CompareStyle import CompareStyle, compare_style_option
+from cubetime.AppOptions import (
+    all_segments_option,
+    compare_style_option,
+    cumulative_segments_option,
+    parse_directory,
+    parse_min_best,
+    parse_segments,
+    plot_type_option,
+    string_list_option,
+    taskname_option,
+)
+from cubetime.CompareStyle import CompareStyle
 from cubetime.Config import global_config
-from cubetime.Plotting import plot_type_option, PlotType, TimePlotter
+from cubetime.Plotting import plot_correlations, PlotType, TimePlotter
 from cubetime.TaskIndex import TaskIndex
 from cubetime.TimeSet import TimeSet
 from cubetime.TimedTask import TimedTask
-
-
-def taskname_option(required: bool, help_suffix: str, allow_alias: bool):
-    """
-    Creates option decorator for taskname argument.
-
-    Args:
-        required: True if taskname is necessary
-        help_suffix: help message is f"single task name to {help_suffix}"
-
-    Returns:
-        click option decorator
-    """
-    return click.option(
-        "--taskname",
-        "-t",
-        prompt=False,
-        required=required,
-        type=str,
-        help=f"single task name{' (or alias)' if allow_alias else ''} to {help_suffix}",
-    )
-
-
-def string_list_option(
-    option_name: str,
-    description: str,
-    required: bool,
-    help_suffix: str,
-    letter: str = None,
-):
-    """
-    Creates an option that should be interpreted as a comma-separated list of strings.
-
-    Args:
-        option_name: the name to specify the option in the terminal
-        description: few-words description of what is in the list
-        required: True if the option must be provided for command to work
-        help_suffix: string to put after "comma-separated {description} to " in help
-
-    Returns:
-        click option decorator
-    """
-    return click.option(
-        f"--{option_name}",
-        f"-{option_name[0] if letter is None else letter}",
-        prompt=False,
-        required=required,
-        type=str,
-        callback=(lambda ctx, param, s: None if s is None else s.split(",")),
-        help=f"comma-separated {description} to {help_suffix}",
-    )
-
-
-all_segments_option = click.option(
-    "--all_segments",
-    "-a",
-    default=False,
-    is_flag=True,
-    help="if given, all segments plotted (overrides --segments)",
-)
-
-
-cumulative_segments_option = click.option(
-    "--cumulative_segments",
-    "-c",
-    default=False,
-    is_flag=True,
-    help=(
-        "if given, cumulative times are plotted (ignored "
-        "if neither --segments nor --all_segments are given)"
-    ),
-)
-
-
-def parse_segments() -> List[str]:
-    """
-    Parses a list of segments from user input.
-
-    Returns:
-       List with at least one element. If user supplies no input, ["complete"] yielded
-    """
-    prompt_message: str = (
-        "Enter comma-separated segments to use "
-        "(empty string creates one 'complete' segment)"
-    )
-    raw: str = click.prompt(prompt_message, type=str, default="")
-    if raw:
-        return raw.split(",")
-    else:
-        return ["complete"]
-
-
-def parse_directory() -> Optional[str]:
-    """
-    Gets the directory to pass to use for a new task from user input.
-
-    Returns:
-        None if the user supplies no input (implicitly desiring code to make one).
-        Otherwise, gives the name of the directory that the user provided
-    """
-    prompt_message: str = (
-        "Enter directory to put data from this task "
-        "(empty string attempts to auto-create a directory)"
-    )
-    raw: str = click.prompt(prompt_message, type=str, default="")
-    return raw if raw else None
-
-
-def parse_min_best() -> bool:
-    """
-    Solicits input from user on whether smaller or larger times are better for a task.
-
-    Returns:
-        True if smaller times are better than larger times
-    """
-    return click.confirm("Are smaller times better for this task?")
 
 
 @click.group()
@@ -283,14 +178,43 @@ def plot(
     return
 
 
-@main.command(name="list")
+@main.command()
+@taskname_option(
+    required=True, help_suffix="find correlations amongst segments", allow_alias=True
+)
+@string_list_option(
+    "segments", "segment names", required=False, help_suffix="find correlations amongst"
+)
 @click.pass_context
-def list_command(ctx: click.Context) -> None:
+def correlation(ctx: click.Context, taskname: str, segments: List[str] = None) -> None:
     """
-    Lists all names and aliases of stored tasks.
+    Plots correlation matrix of segment times of a task.
+
+    NOTE: correlations are only meaningful when the task
+    is multi-segment and multiple segments are chosen.
     """
     task_index: TaskIndex = ctx.obj
-    click.echo(f"\n{task_index.alias_summary}\n")
+    try:
+        plot_correlations(timed_task=task_index[taskname], segments=segments)
+    except ValueError:
+        raise click.UsageError("Correlations are not meaningful for single segments.")
+    return
+
+
+@main.command(name="list")
+@taskname_option(required=False, help_suffix="list segments of", allow_alias=True)
+@click.pass_context
+def list_command(ctx: click.Context, taskname: str) -> None:
+    """
+    Lists names/aliases of all tasks or segments of one task.
+    """
+    task_index: TaskIndex = ctx.obj
+    if taskname is None:
+        click.echo(f"\n{task_index.alias_summary}\n")
+    else:
+        timed_task: TimedTask = task_index[taskname]
+        click.echo(f"{timed_task.name} aliases: {sorted(timed_task.aliases)}")
+        click.echo(f"{timed_task.name} segments: {timed_task.segments}")
     return
 
 

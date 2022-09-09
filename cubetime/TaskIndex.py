@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Callable, Collection, Dict, List, Optional
 
@@ -7,6 +8,8 @@ from cubetime.Config import global_config
 from cubetime.TimedTask import TimedTask
 from cubetime.TimeSet import TimeSet, TIME_AGG_FUNCS
 from cubetime.Utilities import print_pandas_dataframe
+
+logger = logging.getLogger(__name__)
 
 SPECIAL_CHARACTERS: List[str] = [","]
 """Characters that are not allowed in segment or task names."""
@@ -40,6 +43,7 @@ class TaskIndex:
                 if element.is_dir():
                     tasks.append(TimedTask.from_directory(element.path))
             self._timed_tasks = {task.name: task for task in tasks}
+            logger.debug(f"Loaded {len(self._timed_tasks)} stored tasks.")
         return self._timed_tasks
 
     @property
@@ -142,6 +146,9 @@ class TaskIndex:
         new_task.save()
         if aliases is not None:
             self.add_aliases(name, aliases)
+        logger.info(
+            f"Added new task with name {name} to the index. It's stored in {directory}."
+        )
         return
 
     def print_summary(
@@ -198,6 +205,7 @@ class TaskIndex:
         self.check_names(new_alias)
         timed_task.add_alias(new_alias)
         self.alias_dictionary[new_alias] = timed_task.name
+        logger.info(f"Added alias {new_alias}->{timed_task.name}.")
         return
 
     def add_aliases(self, key: str, aliases: Collection[str]) -> None:
@@ -241,6 +249,7 @@ class TaskIndex:
             )
         self.timed_tasks[name].remove_alias(alias)
         self.alias_dictionary.pop(alias)
+        logger.info(f"Removed alias {alias}->{name}")
         return
 
     def remove_aliases(self, aliases: List[str]) -> None:
@@ -283,4 +292,6 @@ class TaskIndex:
         for alias in timed_task.aliases:
             self.alias_dictionary.pop(alias)
         timed_task.delete()
+        self.timed_tasks.pop(name)
+        logger.info(f"Deleted task with name {name}.")
         return

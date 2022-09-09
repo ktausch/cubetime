@@ -1,5 +1,6 @@
 import click
 from datetime import datetime
+import logging
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from typing_extensions import Self
@@ -10,6 +11,8 @@ import pandas as pd
 from cubetime.CompareStyle import CompareStyle
 from cubetime.CompareTime import CompareTime, compare_terminal_output
 from cubetime.Utilities import print_pandas_dataframe
+
+logger = logging.getLogger(__name__)
 
 DATE_COLUMN: str = "date"
 """Name of the date column in the dataframes"""
@@ -467,6 +470,7 @@ class TimeSet:
             compare_style: the method of comparison
         """
         date: datetime = datetime.now()
+        logger.info(f"Comparing against {compare_style.name}.")
         click.prompt(f"Start {self.segments[0]}", default="", show_default=False)
         (compare_segments, compare_cumulatives) = self.make_compare_times(compare_style)
         (best_segments, best_cumulatives) = self.best_compare_times
@@ -537,8 +541,9 @@ class TimeSet:
                 new_times = np.concatenate([new_times, nans_to_concatenate])
             if click.confirm("Should this run be added?"):
                 self.add_row(date, new_times)
+                logger.info("Adding new completion time.")
             else:
-                click.echo("OK. Not adding.")
+                logger.info("Not adding new time because of user request.")
         else:
             click.echo("Not adding new time because run aborted during first segment.")
         return

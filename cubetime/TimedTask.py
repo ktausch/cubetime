@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 from typing import Any, Callable, Dict, List, Optional, Set
@@ -5,6 +6,8 @@ from typing_extensions import Self
 import yaml
 
 from cubetime.TimeSet import TimeSet
+
+logger = logging.getLogger(__name__)
 
 
 class TimedTask:
@@ -102,6 +105,7 @@ class TimedTask:
         kwargs: Dict[str, Any] = {"directory": directory}
         with open(cls.make_config_filename(directory), "r") as file:
             kwargs.update(yaml.safe_load(file))
+        logger.debug(f"Loading task from directory {directory}.")
         return cls(**kwargs)
 
     def save(self) -> None:

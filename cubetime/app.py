@@ -1,4 +1,5 @@
 import click
+import logging
 from typing import Any, List
 
 from cubetime.AppOptions import (
@@ -18,6 +19,7 @@ from cubetime.Plotting import plot_correlations, PlotType, TimePlotter
 from cubetime.TaskIndex import TaskIndex
 from cubetime.TimeSet import TimeSet
 from cubetime.TimedTask import TimedTask
+logging.basicConfig(level=logging.INFO)
 
 
 @click.group()

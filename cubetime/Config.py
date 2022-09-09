@@ -1,6 +1,9 @@
+import logging
 import os
 from typing import Any, Callable, Dict, Iterator
 import yaml
+
+logger = logging.getLogger(__name__)
 
 HOME_DIRECTORY = os.environ["HOME"]
 """Home directory"""
@@ -70,6 +73,7 @@ class _GlobalConfig:
             value: the value to set for the given key
         """
         self.values[key] = value
+        logging.info(f"Setting global config variable {key} to {value}.")
         self.save()
         return
 
@@ -93,6 +97,7 @@ class _GlobalConfig:
             key: the config variable to delete
         """
         del self.values[key]
+        logging.info(f"Deleting global config variable with name {key}.")
         self.save()
         return
 

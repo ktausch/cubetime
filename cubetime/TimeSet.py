@@ -16,7 +16,9 @@ DATE_COLUMN: str = "date"
 SINGLETON_SEGMENT_COLUMN = "complete"
 """Name of single segment in single segment tasks with no custom segment name."""
 AGG_FUNCS: List[str] = ["min", "median", "max", "mean", "std", "sum", "count"]
+"""Aggregation functions to use for summarizing times."""
 TIME_AGG_FUNCS: List[str] = [f for f in AGG_FUNCS if f not in ["count"]]
+"""Subset of aggregation functions that create times (columns that should be H:MM:SS)"""
 
 
 class TimeSet:
@@ -31,6 +33,7 @@ class TimeSet:
         Args:
             times: DataFrame containing segment times and dates of runs
             copy: if True, times is copied before being stored
+            min_best: if True, smaller times are considered better
         """
         self.times: pd.DataFrame = times.copy() if copy else times
         self.segments: List[str] = self._process_columns_into_segments()
@@ -640,3 +643,26 @@ class TimeSet:
             print_pandas_dataframe(self.cumulative_summary, **kwargs)
         print_func()
         return
+
+    def correlations(self, segments: List[str] = None) -> pd.DataFrame:
+        """
+        Gets the correlations between segment times.
+
+        Args:
+            segments: list of string segment names (or None if all segments included)
+
+        Returns:
+            DataFrame containing correlation values
+        """
+        if segments is None:
+            segments = self.segments
+        if len(segments) < 2:
+            raise ValueError("correlations are not meaningful for single segments.")
+        times: np.ndarray = self.times[segments].values
+        means: np.ndarray = np.mean(times, axis=0, keepdims=True)
+        differences: np.ndarray = times - means
+        covariance: np.ndarray = np.dot(differences.T, differences)
+        variance: np.ndarray = np.diag(covariance)
+        norm: np.ndarray = np.sqrt(variance[:,np.newaxis] * variance[np.newaxis,:])
+        correlation: np.ndarray = covariance / norm
+        return pd.DataFrame(data=correlation, index=segments, columns=segments)

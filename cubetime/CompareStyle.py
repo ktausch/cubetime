@@ -1,6 +1,4 @@
-import click
 from enum import Enum
-from typing import Callable
 
 
 class CompareStyle(Enum):
@@ -26,24 +24,3 @@ class CompareStyle(Enum):
     best run, but segment times are modified so that the total time save
     from the best run is split evenly amongst all segments.
     """
-
-
-def compare_style_option(default: CompareStyle) -> Callable[[Callable], Callable]:
-    """
-    Implements a click option for the CompareStyle enum.
-
-    Args:
-        default: the default compare style
-
-    Returns:
-        click option decorator
-    """
-    return click.option(
-        "--compare_style",
-        "-c",
-        type=click.Choice(CompareStyle.__members__, case_sensitive=False),
-        show_choices=True,
-        default=default.name,
-        show_default=True,
-        callback=(lambda ctx, param, style: CompareStyle.__members__[style]),
-    )

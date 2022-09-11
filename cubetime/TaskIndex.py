@@ -20,14 +20,38 @@ class TaskIndex:
     An index of all timed tasks stored in cubetime.
     """
 
-    def __init__(self):
+    def __init__(self, data_directory: str = None):
         """
         Creates the index by reading from the global config.
         """
-        self.data_directory: str = global_config["data_directory"]
+        self.data_directory: str = (
+            global_config["data_directory"]
+            if data_directory is None
+            else data_directory
+        )
         os.makedirs(self.data_directory, exist_ok=True)
         self._timed_tasks: Optional[Dict[str, TimedTask]] = None
         self._alias_dictionary: Optional[Dict[str, str]] = None
+
+    @staticmethod
+    def _load_tasks(directory: str) -> List[TimedTask]:
+        """
+        Loads tasks from the given directory, recursively.
+
+        Args:
+            directory: the directory to search for tasks
+
+        Returns:
+            list of tasks loaded from this directory (and all directories inside it)
+        """
+        tasks: List[TimedTask] = []
+        for element in os.scandir(directory):
+            if element.is_dir():
+                try:
+                    tasks.append(TimedTask.from_directory(element.path))
+                except FileNotFoundError:
+                    tasks.extend(TaskIndex._load_tasks(element.path))
+        return tasks
 
     @property
     def timed_tasks(self) -> Dict[str, TimedTask]:
@@ -38,11 +62,9 @@ class TaskIndex:
             dictionary from timed task name to the task itself
         """
         if self._timed_tasks is None:
-            tasks: List[TimedTask] = []
-            for element in os.scandir(self.data_directory):
-                if element.is_dir():
-                    tasks.append(TimedTask.from_directory(element.path))
-            self._timed_tasks = {task.name: task for task in tasks}
+            self._timed_tasks = {
+                task.name: task for task in self._load_tasks(self.data_directory)
+            }
             logger.debug(f"Loaded {len(self._timed_tasks)} stored tasks.")
         return self._timed_tasks
 
@@ -105,6 +127,19 @@ class TaskIndex:
                 )
         return
 
+    @staticmethod
+    def is_valid_char(char: str):
+        """
+        Checks if a character belongs in a leaf directory.
+
+        Args:
+            char: the character to check
+
+        Returns:
+            True if char is alpha-numeric or is the OS's path separator
+        """
+        return char.isalnum() or (char == os.path.sep)
+
     def new_timed_task(
         self,
         name: str,
@@ -129,7 +164,7 @@ class TaskIndex:
             raise ValueError("Cannot add two timed tasks with the same name.")
         self.check_names(name, *segments)
         if leaf_directory is None:
-            leaf_directory = "".join(c if c.isalnum() else "_" for c in name)
+            leaf_directory = "".join(c if self.is_valid_char(c) else "_" for c in name)
         directory = os.path.join(self.data_directory, leaf_directory)
         try:
             os.makedirs(directory, exist_ok=False)
@@ -184,7 +219,7 @@ class TaskIndex:
         for name in self.task_names:
             timed_task: TimedTask = self.timed_tasks[name]
             summary_lines.append(f'{name}: {", ".join(sorted(timed_task.aliases))}')
-        return '\n'.join(summary_lines)
+        return "\n".join(summary_lines)
 
     def add_alias(self, key: str, new_alias: str) -> None:
         """
@@ -295,3 +330,17 @@ class TaskIndex:
         self.timed_tasks.pop(name)
         logger.info(f"Deleted task with name {name}.")
         return
+
+    def total_time_spent(self, names: List[str] = None) -> float:
+        """
+        Gets the total amount of time spent on some or all stored tasks.
+
+        Args:
+            names: list of string names/aliases of tasks to include (None includes all)
+
+        Returns:
+            number of seconds spent on tasks referred to by names
+        """
+        if names is None:
+            names = self.task_names
+        return sum([self[name].total_time_spent for name in names])

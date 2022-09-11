@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Callable, Dict, Iterator
+from typing import Any, Callable, Dict, Iterator, Set
 import yaml
 
 logger = logging.getLogger(__name__)
@@ -16,6 +16,8 @@ DEFAULT_GLOBAL_CONFIG: Dict[str, Any] = {
     "num_decimal_places": 1,
 }
 """Default global configuration dictionary."""
+
+PROTECTED_CONFIG_NAMES: Set[str] = {"data_directory"}
 
 
 class _GlobalConfig:
@@ -96,6 +98,12 @@ class _GlobalConfig:
         Args:
             key: the config variable to delete
         """
+        if key in PROTECTED_CONFIG_NAMES:
+            raise KeyError(
+                f"Config variable {key} cannot be deleted. It can only be modified."
+                "If you really think this should be done, you can manually delete "
+                f"{key} entry from the config file at {GLOBAL_CONFIG_FILENAME}."
+            )
         del self.values[key]
         logging.info(f"Deleting global config variable with name {key}.")
         self.save()

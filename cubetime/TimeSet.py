@@ -479,7 +479,9 @@ class TimeSet:
             segment_index: int = len(unix_times) - 1
             if segment_index == self.num_segments:
                 break
-            prompt_message: str = f"Finish {self.segments[segment_index]}"
+            prompt_message: str = (
+                f'Finish {self.segments[segment_index]} (or "abort" to cancel run)'
+            )
             try:
                 prompt_input: str = click.prompt(
                     prompt_message, default="", show_default=False
@@ -487,7 +489,7 @@ class TimeSet:
                 if prompt_input.lower() == "abort":
                     break
                 unix_times.append(time.time())
-            except KeyboardInterrupt:
+            except (click.Abort, KeyboardInterrupt):
                 unix_times.pop()
                 if unix_times:
                     click.echo(
@@ -671,3 +673,13 @@ class TimeSet:
         norm: np.ndarray = np.sqrt(variance[:,np.newaxis] * variance[np.newaxis,:])
         correlation: np.ndarray = covariance / norm
         return pd.DataFrame(data=correlation, index=segments, columns=segments)
+
+    @property
+    def total_time_spent(self) -> float:
+        """
+        Gets the total amount of time spent on this task.
+
+        Returns:
+            total number of seconds spend on this task
+        """
+        return np.sum(self.times[self.segments].values)

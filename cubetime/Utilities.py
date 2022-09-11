@@ -1,9 +1,15 @@
-from typing import Callable, Dict, List, Tuple, Union
+from datetime import datetime
+import logging
+import os
+import shutil
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 
 from cubetime.Config import global_config
+
+logger = logging.getLogger(__name__)
 
 SECONDS_PER_MINUTE: int = 60
 """Number of seconds per minute"""
@@ -50,6 +56,7 @@ class TimeFormatter:
         """
         return (1, number) if (number >= 0) else (-1, -number)
 
+    @staticmethod
     def decimal_format(number: float) -> str:
         """
         Formats a float using the configured number of decimal places.
@@ -62,6 +69,7 @@ class TimeFormatter:
         """
         return (f"{{:.{global_config['num_decimal_places']}f}}").format(number)
 
+    @staticmethod
     def make_time_string(signed_total: float, show_plus: bool = False) -> str:
         """
         Makes a time string of the form (H:)(M:)S.
@@ -93,7 +101,7 @@ class TimeFormatter:
         return string
 
     @staticmethod
-    def make_time_column(old_column: pd.Series, show_plus: bool = False) -> pd.Series:
+    def make_time_series(old_series: pd.Series, show_plus: bool = False) -> pd.Series:
         """
         Makes a time string column from a numerical column containing number of seconds.
 
@@ -105,19 +113,23 @@ class TimeFormatter:
             Series containing time string versions of elements of old_column
         """
         data: List[str] = []
-        for element in old_column.values:
+        for element in old_series.values:
             data.append(TimeFormatter.make_time_string(element, show_plus=show_plus))
-        return pd.Series(data=data, index=old_column.index, name=old_column.name)
+        return pd.Series(data=data, index=old_series.index, name=old_series.name)
 
 
 SliceMaker = Callable[[str], Tuple[Union[slice, str], Union[slice, str]]]
+
+
+make_time_string: Callable[..., str] = TimeFormatter.make_time_string
+"""Makes a time string of the form [[H:]MM:]SS from a float number of seconds."""
 
 
 def print_pandas_dataframe(
     frame: pd.DataFrame,
     time_columns: Union[List[str], Dict[str, bool]] = None,
     time_rows: Union[List[str], Dict[str, bool]] = None,
-    print_func=print,
+    print_func: Callable[..., None] = print,
 ) -> None:
     """
     Prints DataFrame with config variables determining formatting.
@@ -146,8 +158,39 @@ def print_pandas_dataframe(
         )
         for (col_or_row, show_plus) in cols_or_rows.items():
             this_slice = slice_maker(col_or_row)
-            to_print.loc[this_slice] = TimeFormatter.make_time_column(
+            to_print.loc[this_slice] = TimeFormatter.make_time_series(
                 to_print.loc[this_slice], show_plus=show_plus
             )
     with pd.option_context("display.precision", global_config["num_decimal_places"]):
         print_func(to_print)
+
+
+def make_data_snapshot(filename: str, force: bool = False) -> None:
+    """
+    Makes a snapshot of the data directory.
+
+    Args:
+        filename: path to file to save. Must end if .tar.gz or .zip
+        force: if True, overwrites file if it already exists
+    """
+    if os.path.exists(filename) and not force:
+        raise FileExistsError(
+            "Cannot save data snapshot because file already exists. "
+            "Either move/delete existing file or set force flag."
+        )
+    extension_to_type: Dict[str, str] = {".tar.gz": "gztar", ".zip": "zip"}
+    archive_type: Optional[str] = None
+    for extension in extension_to_type:
+        if filename[-len(extension):] == extension:
+            filename = filename[:-len(extension)]
+            archive_type = extension_to_type[extension]
+            break
+    if archive_type is None:
+        raise ValueError(
+            "filename given to make_data_snapshot dit not have one of "
+            f"the following extensions: {sorted(extension_to_type)}."
+        )
+    shutil.make_archive(filename, archive_type, global_config["data_directory"])
+    timestamp = datetime.now().strftime(r"%H:%M:%S, %d %b, %Y")
+    logger.info(f"Saved snapshot of data at {timestamp} to {filename}{extension}.")
+    return

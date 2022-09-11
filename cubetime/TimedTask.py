@@ -184,3 +184,13 @@ class TimedTask:
         """Deletes this task from disk."""
         shutil.rmtree(self.directory)
         return
+
+    @property
+    def total_time_spent(self):
+        """
+        Gets the total amount of time spent on this task.
+
+        Returns:
+            amount of time in seconds spent on this task
+        """
+        return self.time_set.total_time_spent

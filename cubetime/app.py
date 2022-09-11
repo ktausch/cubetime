@@ -19,6 +19,8 @@ from cubetime.Plotting import plot_correlations, PlotType, TimePlotter
 from cubetime.TaskIndex import TaskIndex
 from cubetime.TimeSet import TimeSet
 from cubetime.TimedTask import TimedTask
+from cubetime.Utilities import make_data_snapshot, make_time_string
+
 logging.basicConfig(level=logging.INFO)
 
 
@@ -255,8 +257,58 @@ def config(name: str = None, value: str = None) -> None:
                 f"{name} not in cubetime config. {confirmation_message}"
             )
         if click.confirm(confirmation_message):
-            global_config[name] = formatted
+            data_directory_confirmation: str = (
+                'Changing the data directory is potentially destructive. '
+                'It is recommended that you save an image of the data '
+                'directory if you have not already done so (see "snapshot" '
+                'command). Are you sure you want to change data_directory?'
+            )
+            if (name != "data_directory") or click.confirm(data_directory_confirmation):
+                global_config[name] = formatted
     return
+
+
+@main.command()
+@click.option(
+    "--name",
+    "-n",
+    required=True,
+    default="cubetime_data_snapshot.zip",
+    help="path to file to save (with .zip or .tar.gz extension)",
+)
+@click.option(
+    "--force",
+    "-f",
+    default=False,
+    required=True,
+    is_flag=True,
+    help="if true, overwrites file if it already exists",
+)
+def snapshot(name: str, force: bool) -> None:
+    """
+    Creates a snapshot of the data directory.
+    """
+    make_data_snapshot(name, force=force)
+    return
+
+
+@main.command()
+@string_list_option(
+    "tasknames",
+    "task name(s) or alias(es)",
+    required=False,
+    help_suffix="find time spent on",
+    letter='t',
+)
+@click.pass_context
+def time_spent(ctx: click.Context, tasknames: List[str] = None) -> None:
+    """
+    Gets the total time spent on all tasks (or just one).
+    """
+    task_index: TaskIndex = ctx.obj
+    time_spent: float = task_index.total_time_spent(tasknames)
+    click.echo(make_time_string(time_spent))
+    return    
 
 
 if __name__ == "__main__":

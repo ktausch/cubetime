@@ -8,3 +8,5 @@ numpy
 pandas
 pytest
 pyyaml
+setuptools
+wheel

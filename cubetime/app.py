@@ -13,13 +13,14 @@ from cubetime.AppOptions import (
     string_list_option,
     taskname_option,
 )
+from cubetime.Archiving import make_data_snapshot
 from cubetime.CompareStyle import CompareStyle
 from cubetime.Config import global_config
 from cubetime.Plotting import plot_correlations, PlotType, TimePlotter
 from cubetime.TaskIndex import TaskIndex
 from cubetime.TimeSet import TimeSet
 from cubetime.TimedTask import TimedTask
-from cubetime.Utilities import make_data_snapshot, make_time_string
+from cubetime.Formatting import make_time_string
 
 logging.basicConfig(level=logging.INFO)
 

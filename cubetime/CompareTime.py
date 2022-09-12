@@ -2,7 +2,7 @@ from enum import Enum
 import numpy as np
 from typing import Optional
 
-from cubetime.Utilities import TimeFormatter
+from cubetime.Formatting import make_time_string
 
 COLOR_DICT = {"red": 31, "yellow": 33, "green": 32, "white": 37}
 """Integers to place in terminal formatting strings for colors used in printing."""
@@ -41,7 +41,7 @@ class CompareResult:
         """
         if np.isnan(self.continuous):
             return ""
-        return f" ({TimeFormatter.make_time_string(self.continuous, show_plus=True)})"
+        return f" ({make_time_string(self.continuous, show_plus=True)})"
 
 
 def comparison_color(current: CompareResult, best: CompareResult) -> str:
@@ -146,7 +146,7 @@ def compare_terminal_output(
     segment_color: str = comparison_color(
         segment_compare_result, best_segment_compare_result
     )
-    main_string: str = TimeFormatter.make_time_string(time, show_plus=False)
+    main_string: str = make_time_string(time, show_plus=False)
     compare_string: str = str(segment_compare_result)
     return terminal_format(
         f"{main_string}{compare_string}",

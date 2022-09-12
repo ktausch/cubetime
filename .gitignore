@@ -3,3 +3,5 @@ venv/
 .vscode/
 build/
 cubetime.egg-info
+.coverage
+htmlcov

@@ -10,7 +10,7 @@ import pandas as pd
 
 from cubetime.CompareStyle import CompareStyle
 from cubetime.CompareTime import CompareTime, compare_terminal_output
-from cubetime.Utilities import print_pandas_dataframe
+from cubetime.Formatting import print_pandas_dataframe
 
 logger = logging.getLogger(__name__)
 

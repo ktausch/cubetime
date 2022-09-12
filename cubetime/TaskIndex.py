@@ -7,7 +7,7 @@ import pandas as pd
 from cubetime.Config import global_config
 from cubetime.TimedTask import TimedTask
 from cubetime.TimeSet import TimeSet, TIME_AGG_FUNCS
-from cubetime.Utilities import print_pandas_dataframe
+from cubetime.Formatting import print_pandas_dataframe
 
 logger = logging.getLogger(__name__)
 

@@ -2,6 +2,7 @@ import logging
 import os
 from typing import Callable, Collection, Dict, List, Optional
 
+import numpy as np
 import pandas as pd
 
 from cubetime.Config import global_config
@@ -331,16 +332,39 @@ class TaskIndex:
         logger.info(f"Deleted task with name {name}.")
         return
 
-    def total_time_spent(self, names: List[str] = None) -> float:
+    def time_spent(self, names: List[str] = None) -> pd.DataFrame:
         """
-        Gets the total amount of time spent on some or all stored tasks.
+        Gets the amount of time spent on some or all stored tasks.
 
         Args:
             names: list of string names/aliases of tasks to include (None includes all)
 
         Returns:
-            number of seconds spent on tasks referred to by names
+            single column data frame with rows for each task included and a total
         """
         if names is None:
             names = self.task_names
-        return sum([self[name].total_time_spent for name in names])
+        frame = pd.DataFrame(data=np.ndarray((1, 0)), index=["time spent"])
+        for name in names:
+            timed_task: TimedTask = self[name]
+            frame[timed_task.name] = [timed_task.total_time_spent]
+        frame["total"] = np.sum(frame.values)
+        return frame.T
+
+    def print_time_spent(
+        self, names: List[str] = None, print_func: Callable[..., None] = print
+    ) -> None:
+        """
+        Prints the formatted time_spent DataFrame.
+
+        Args:
+            names: list of string names/aliases of tasks to include (None includes all)
+            print_func: the function similar to print that should be used to print
+        """
+        time_spent: pd.DataFrame = self.time_spent(names)
+        print_func()
+        print_pandas_dataframe(
+            time_spent, time_columns=list(time_spent.columns), print_func=print_func
+        )
+        print_func()
+        return

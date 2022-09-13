@@ -2,6 +2,8 @@ import click
 import logging
 from typing import Any, List
 
+import pandas as pd
+
 from cubetime.AppOptions import (
     all_segments_option,
     compare_style_option,
@@ -20,7 +22,7 @@ from cubetime.Plotting import plot_correlations, PlotType, TimePlotter
 from cubetime.TaskIndex import TaskIndex
 from cubetime.TimeSet import TimeSet
 from cubetime.TimedTask import TimedTask
-from cubetime.Formatting import make_time_string
+from cubetime.Formatting import make_time_string, print_pandas_dataframe
 
 logging.basicConfig(level=logging.INFO)
 
@@ -218,8 +220,9 @@ def list_command(ctx: click.Context, taskname: str) -> None:
         click.echo(f"\n{task_index.alias_summary}\n")
     else:
         timed_task: TimedTask = task_index[taskname]
-        click.echo(f"{timed_task.name} aliases: {sorted(timed_task.aliases)}")
-        click.echo(f"{timed_task.name} segments: {timed_task.segments}")
+        click.echo(f"\nTask name: {timed_task.name}")
+        click.echo(f"\tAliases: {', '.join(sorted(timed_task.aliases))}")
+        click.echo(f"\tSegments: {', '.join(timed_task.segments)}\n")
     return
 
 
@@ -307,8 +310,7 @@ def time_spent(ctx: click.Context, tasknames: List[str] = None) -> None:
     Gets the total time spent on all tasks (or just one).
     """
     task_index: TaskIndex = ctx.obj
-    time_spent: float = task_index.total_time_spent(tasknames)
-    click.echo(make_time_string(time_spent))
+    task_index.print_time_spent(tasknames, print_func=click.echo)
     return    
 
 

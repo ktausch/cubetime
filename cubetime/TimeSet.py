@@ -506,7 +506,7 @@ class TimeSet:
                 min_best=self.min_best,
             )
             echo_message: str = f"Segment time: {segment_time_string}"
-            if self.is_multi_segment:
+            if segment_index > 0:
                 cumulative_time_string: str = compare_terminal_output(
                     segment_index=segment_index,
                     time=(unix_times[-1] - unix_times[0]),

@@ -22,7 +22,7 @@ from cubetime.Plotting import plot_correlations, PlotType, TimePlotter
 from cubetime.TaskIndex import TaskIndex
 from cubetime.TimeSet import TimeSet
 from cubetime.TimedTask import TimedTask
-from cubetime.Formatting import make_time_string, print_pandas_dataframe
+from cubetime.Formatting import print_pandas_dataframe
 
 logging.basicConfig(level=logging.INFO)
 

@@ -150,6 +150,20 @@ def summarize(
 
 
 @main.command()
+@taskname_option(required=True, help_suffix="print", allow_alias=True)
+@click.pass_context
+def print_times(ctx: click.Context, taskname: str) -> None:
+    """
+    Prints the times of a given task.
+    """
+    task_index: TaskIndex = ctx.obj
+    times: pd.DataFrame = task_index[taskname].time_set.times
+    time_columns: List[str] = [column for column in times.columns if column != "date"]
+    print_pandas_dataframe(times, time_columns=time_columns, print_func=click.echo)
+    return
+
+
+@main.command()
 @taskname_option(required=True, help_suffix="make histogram(s) for", allow_alias=True)
 @all_segments_option
 @cumulative_segments_option

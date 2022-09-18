@@ -5,10 +5,10 @@ from typing import Callable, Collection, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-from cubetime.Config import global_config
-from cubetime.TimedTask import TimedTask
-from cubetime.TimeSet import TimeSet, TIME_AGG_FUNCS
-from cubetime.Formatting import print_pandas_dataframe
+from cubetime.core.Config import global_config
+from cubetime.core.Formatting import print_pandas_dataframe
+from cubetime.core.TimedTask import TimedTask
+from cubetime.core.TimeSet import TimeSet, TIME_AGG_FUNCS
 
 logger = logging.getLogger(__name__)
 

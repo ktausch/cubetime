@@ -4,7 +4,7 @@ from typing import Any, List
 
 import pandas as pd
 
-from cubetime.AppOptions import (
+from cubetime.app.Options import (
     all_segments_option,
     compare_style_option,
     cumulative_segments_option,
@@ -15,14 +15,15 @@ from cubetime.AppOptions import (
     string_list_option,
     taskname_option,
 )
-from cubetime.Archiving import make_data_snapshot
-from cubetime.CompareStyle import CompareStyle
-from cubetime.Config import global_config
-from cubetime.Plotting import plot_correlations, PlotType, TimePlotter
-from cubetime.TaskIndex import TaskIndex
-from cubetime.TimeSet import TimeSet
-from cubetime.TimedTask import TimedTask
-from cubetime.Formatting import print_pandas_dataframe
+from cubetime.app.Plotting import plot_correlations, PlotType, TimePlotter
+
+from cubetime.core.Archiving import make_data_snapshot
+from cubetime.core.CompareStyle import CompareStyle
+from cubetime.core.Config import global_config
+from cubetime.core.Formatting import print_pandas_dataframe
+from cubetime.core.TaskIndex import TaskIndex
+from cubetime.core.TimeSet import TimeSet
+from cubetime.core.TimedTask import TimedTask
 
 logging.basicConfig(level=logging.INFO)
 

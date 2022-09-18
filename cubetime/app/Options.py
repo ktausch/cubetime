@@ -1,8 +1,8 @@
 import click
 from typing import List, Optional
 
-from cubetime.CompareStyle import CompareStyle
-from cubetime.Plotting import PlotType
+from cubetime.app.Plotting import PlotType
+from cubetime.core.CompareStyle import CompareStyle
 
 
 def taskname_option(required: bool, help_suffix: str, allow_alias: bool):

@@ -4,7 +4,7 @@ from typing import Callable, Dict, List, Tuple, Union
 import numpy as np
 import pandas as pd
 
-from cubetime.Config import global_config
+from cubetime.core.Config import global_config
 
 logger = logging.getLogger(__name__)
 

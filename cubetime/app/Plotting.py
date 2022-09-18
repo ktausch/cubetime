@@ -5,8 +5,8 @@ import numpy as np
 import matplotlib.pyplot as pl
 import pandas as pd
 
-from cubetime.TimedTask import TimedTask
-from cubetime.TimeSet import TimeSet
+from cubetime.core.TimedTask import TimedTask
+from cubetime.core.TimeSet import TimeSet
 
 
 class PlotType(Enum):

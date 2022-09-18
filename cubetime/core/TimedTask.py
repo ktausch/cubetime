@@ -5,7 +5,7 @@ from typing import Any, Callable, Dict, List, Optional, Set
 from typing_extensions import Self
 import yaml
 
-from cubetime.TimeSet import TimeSet
+from cubetime.core.TimeSet import TimeSet
 
 logger = logging.getLogger(__name__)
 

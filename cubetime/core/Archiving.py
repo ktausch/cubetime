@@ -4,7 +4,7 @@ import os
 import shutil
 from typing import Dict, Optional
 
-from cubetime.Config import global_config
+from cubetime.core.Config import global_config
 
 logger = logging.getLogger(__name__)
 

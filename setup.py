@@ -30,7 +30,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "cubetime = cubetime.app:main"
+            "cubetime = cubetime.app.main:main"
         ]
     },
 )

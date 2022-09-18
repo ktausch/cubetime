@@ -3,7 +3,7 @@ import numpy as np
 from typing import Optional
 from typing_extensions import Self
 
-from cubetime.Formatting import make_time_string
+from cubetime.core.Formatting import make_time_string
 
 COLOR_DICT = {"red": 31, "yellow": 33, "green": 32, "white": 37}
 """Integers to place in terminal formatting strings for colors used in printing."""

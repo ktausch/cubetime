@@ -8,9 +8,9 @@ from typing_extensions import Self
 import numpy as np
 import pandas as pd
 
-from cubetime.CompareStyle import CompareStyle
-from cubetime.CompareTime import CompareTime, compare_terminal_output
-from cubetime.Formatting import print_pandas_dataframe
+from cubetime.core.CompareStyle import CompareStyle
+from cubetime.core.CompareTime import CompareTime, compare_terminal_output
+from cubetime.core.Formatting import print_pandas_dataframe
 
 logger = logging.getLogger(__name__)
 

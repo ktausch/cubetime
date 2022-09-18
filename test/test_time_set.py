@@ -6,9 +6,9 @@ import pandas as pd
 import pytest
 from typing import List
 
-from cubetime.CompareStyle import CompareStyle
-from cubetime.CompareTime import CompareTime
-from cubetime.TimeSet import SINGLETON_SEGMENT_COLUMN, TimeSet
+from cubetime.core.CompareStyle import CompareStyle
+from cubetime.core.CompareTime import CompareTime
+from cubetime.core.TimeSet import SINGLETON_SEGMENT_COLUMN, TimeSet
 
 TEST_FILE_NAME: str = "tempTHISfileSHOULDbeDELETED"
 

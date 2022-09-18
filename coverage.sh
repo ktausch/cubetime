@@ -9,6 +9,6 @@ else
 fi
 echo "Trying to use python interpreter at $PYTHON_EXEC"
 $PYTHON_EXEC -m coverage run -m pytest $@
-$PYTHON_EXEC -m coverage report cubetime/*py
-$PYTHON_EXEC -m coverage html cubetime/*py
+$PYTHON_EXEC -m coverage report cubetime/core/*py
+$PYTHON_EXEC -m coverage html cubetime/core/*py
 xdg-open htmlcov/index.html &

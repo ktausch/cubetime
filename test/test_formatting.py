@@ -3,8 +3,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from cubetime.Config import global_config
-from cubetime.Formatting import make_time_string, print_pandas_dataframe
+from cubetime.core.Config import global_config
+from cubetime.core.Formatting import make_time_string, print_pandas_dataframe
 
 
 class StringWrapper:

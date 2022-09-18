@@ -1,6 +1,7 @@
 from enum import Enum
 import numpy as np
 from typing import Optional
+from typing_extensions import Self
 
 from cubetime.Formatting import make_time_string
 
@@ -76,6 +77,22 @@ class CompareTime:
             data: array of segment times if available or None otherwise
         """
         self.data: Optional[np.ndarray] = data
+
+    def __eq__(self, other: Self) -> bool:
+        """
+        Checks for equality with the given compare time.
+
+        Args:
+            other: the object with which to check for equality
+
+        Returns:
+            true if both objects have no data or if the data of both are equal
+        """
+        if (self.data is None) != (other.data is None):
+            return False
+        if self.data is None:
+            return True
+        return list(self.data) == list(other.data)
 
     def compare(
         self, segment_index: int, main_time: float, min_better: bool = True

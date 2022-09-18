@@ -42,6 +42,24 @@ class TimeSet:
         self.segments: List[str] = self._process_columns_into_segments()
         self.min_best: bool = min_best
 
+    def __eq__(self, other: Self) -> bool:
+        """
+        Checks for equality between TimeSet objects.
+
+        Args:
+            other: TimeSet to check for equality with
+
+        Returns:
+            true if segments, min_best, and times are equal
+        """
+        if self.min_best != other.min_best:
+            return False
+        if self.segments != other.segments:
+            return False
+        if self.times.shape != other.times.shape:
+            return False
+        return np.all(self.times.values == other.times.values)
+
     @property
     def num_segments(self) -> int:
         """
@@ -107,25 +125,14 @@ class TimeSet:
         """
         return cls(other.times[0:0], min_best=other.min_best, copy=True)
 
-    @classmethod
-    def combine(cls, first: Self, *others: Self) -> Self:
+    def copy(self) -> Self:
         """
-        Combines many TimeSet objects into one.
-
-        Args:
-            first: times that will appear first in the combined frame
-            others: other TimeSet objects to combine. Will appear in same order as given
+        Creates a copy of this object.
 
         Returns:
-            combined TimeSet
+            exact copy of this object
         """
-        frames: List[pd.DataFrame] = [first.times]
-        for other in others:
-            frames.append(other.times)
-            if other.min_best != first.min_best:
-                raise ValueError("TimeSet objects to combine must have same min_best.")
-        combined_frame = pd.concat(frames, axis=0, ignore_index=True)
-        return cls(combined_frame, copy=False, min_best=first.min_best)
+        return TimeSet(self.times, copy=True, min_best=self.min_best)
 
     def save(self, filename: str) -> None:
         """
@@ -360,7 +367,7 @@ class TimeSet:
             self.times = pd.concat([self.times, new_row], axis=0, ignore_index=True)
 
     @staticmethod
-    def make_compare_times_from_segment_times(
+    def _make_compare_times_from_segment_times(
         times: np.ndarray,
     ) -> Tuple[CompareTime, CompareTime]:
         """
@@ -376,7 +383,7 @@ class TimeSet:
         """
         return (CompareTime(times), CompareTime(np.cumsum(times)))
 
-    def make_compare_times_from_run(
+    def _make_compare_times_from_run(
         self, which: int
     ) -> Tuple[CompareTime, CompareTime]:
         """
@@ -391,9 +398,9 @@ class TimeSet:
                 cumulative_comparison: compare times for cumulative segments
         """
         times: np.ndarray = self.times[self.segments].loc[which].values
-        return self.make_compare_times_from_segment_times(times)
+        return self._make_compare_times_from_segment_times(times)
 
-    def make_balanced_best_compare_times(self) -> Tuple[CompareTime, CompareTime]:
+    def _make_balanced_best_compare_times(self) -> Tuple[CompareTime, CompareTime]:
         """
         Makes the compare times to use for balanced best, which splits the
         time save left from the best run into equal amounts per segment.
@@ -410,7 +417,7 @@ class TimeSet:
         time_saves: np.ndarray = best_run_times - best_segment_times
         balanced_time_save_per_segment: float = np.sum(time_saves) / self.num_segments
         balanced_times: np.ndarray = best_segment_times + balanced_time_save_per_segment
-        return self.make_compare_times_from_segment_times(balanced_times)
+        return self._make_compare_times_from_segment_times(balanced_times)
 
     def make_compare_times(
         self, compare_style: CompareStyle
@@ -429,19 +436,21 @@ class TimeSet:
         if not self:
             return (CompareTime(None), CompareTime(None))
         elif compare_style == CompareStyle.BEST_RUN:
-            return self.make_compare_times_from_run(self.best_run_index)
+            return self._make_compare_times_from_run(self.best_run_index)
         elif compare_style == CompareStyle.WORST_RUN:
-            return self.make_compare_times_from_run(self.worst_run_index)
+            return self._make_compare_times_from_run(self.worst_run_index)
         elif compare_style == CompareStyle.LAST_RUN:
-            return self.make_compare_times_from_run(-1)
+            return self._make_compare_times_from_run(len(self) - 1)
         elif compare_style == CompareStyle.BEST_SEGMENTS:
-            return self.make_compare_times_from_segment_times(self.best_times.values)
+            return self._make_compare_times_from_segment_times(self.best_times.values)
         elif compare_style == CompareStyle.AVERAGE_SEGMENTS:
-            return self.make_compare_times_from_segment_times(self.average_times.values)
+            return self._make_compare_times_from_segment_times(
+                self.average_times.values
+            )
         elif compare_style == CompareStyle.WORST_SEGMENTS:
-            return self.make_compare_times_from_segment_times(self.worst_times.values)
+            return self._make_compare_times_from_segment_times(self.worst_times.values)
         elif compare_style == CompareStyle.BALANCED_BEST:
-            return self.make_balanced_best_compare_times()
+            return self._make_balanced_best_compare_times()
         else:
             return CompareTime(None), CompareTime(None)
 
@@ -588,6 +597,7 @@ class TimeSet:
             # count don't have meaningful sums over segments
             result.loc["count", "total"] = result.loc["count", self.segments[-1]]
         result = result.T
+        result["count"] = result["count"].astype(int)
         result.reset_index(inplace=True)
         result.rename(columns={"index": "segment"}, inplace=True)
         result[SORT_COLUMN] = result.apply(make_sort_element, axis=1)
@@ -621,8 +631,9 @@ class TimeSet:
 
         SORT_COLUMN: str = "SORTCOLUMNIGNORE"
         result: pd.DataFrame = self.cumulative_times[self.segments].agg(AGG_FUNCS).T
-        # sum & count of cumulative times is not meaningful except for the final segment
-        result.loc[self.segments[:-1], ["sum", "count"]] = np.nan
+        # sum of cumulative times is not meaningful except for the final segment
+        result.loc[self.segments[:-1], "sum"] = np.nan
+        result["count"] = result["count"].astype(int)
         result.reset_index(inplace=True)
         result.rename(columns={"index": "segment"}, inplace=True)
         result[SORT_COLUMN] = result.apply(make_sort_element, axis=1)
@@ -665,13 +676,14 @@ class TimeSet:
             segments = self.segments
         if len(segments) < 2:
             raise ValueError("correlations are not meaningful for single segments.")
-        times: np.ndarray = self.times[segments].values
+        times: np.ndarray = self.times[segments].values.astype(float)
         means: np.ndarray = np.mean(times, axis=0, keepdims=True)
         differences: np.ndarray = times - means
         covariance: np.ndarray = np.dot(differences.T, differences)
         variance: np.ndarray = np.diag(covariance)
-        norm: np.ndarray = np.sqrt(variance[:,np.newaxis] * variance[np.newaxis,:])
-        correlation: np.ndarray = covariance / norm
+        squared_norm: np.ndarray = variance[:,np.newaxis] * variance[np.newaxis,:]
+        norm: np.ndarray = np.sqrt(squared_norm)
+        correlation: np.ndarray = covariance / np.sqrt(squared_norm)
         return pd.DataFrame(data=correlation, index=segments, columns=segments)
 
     @property

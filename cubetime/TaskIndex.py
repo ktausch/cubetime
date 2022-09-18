@@ -203,8 +203,12 @@ class TaskIndex:
             task: TimedTask = self[key]
             time_set: TimeSet = task.time_set
             summary[task.name] = time_set.cumulative_summary.loc[time_set.segments[-1]]
+        summary = summary.T
+        summary["count"] = summary["count"].astype(int)
         print_func()
-        print_pandas_dataframe(summary, time_rows=TIME_AGG_FUNCS, print_func=print_func)
+        print_pandas_dataframe(
+            summary, time_columns=TIME_AGG_FUNCS, print_func=print_func
+        )
         print_func()
         return
 

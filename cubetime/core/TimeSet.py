@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from cubetime.core.CompareStyle import CompareStyle
-from cubetime.core.CompareTime import CompareTime, compare_terminal_output
+from cubetime.core.CompareTime import CompareTime, ComparisonSet
 from cubetime.core.Formatting import print_pandas_dataframe
 
 logger = logging.getLogger(__name__)
@@ -397,7 +397,7 @@ class TimeSet:
                 segment_comparison: compare times for standalone segments
                 cumulative_comparison: compare times for cumulative segments
         """
-        times: np.ndarray = self.times[self.segments].loc[which].values
+        times: np.ndarray = self.values[which,:]
         return self._make_compare_times_from_segment_times(times)
 
     def _make_balanced_best_compare_times(self) -> Tuple[CompareTime, CompareTime]:
@@ -410,9 +410,7 @@ class TimeSet:
                 segment_comparison: compare times for standalone segments
                 cumulative_comparison: compare times for cumulative segments
         """
-        best_run_times: np.ndarray = (
-            self.times[self.segments].iloc[self.best_run_index].values
-        )
+        best_run_times: np.ndarray = self.values[self.best_run_index,:]
         best_segment_times: np.ndarray = self.best_times.values
         time_saves: np.ndarray = best_run_times - best_segment_times
         balanced_time_save_per_segment: float = np.sum(time_saves) / self.num_segments
@@ -471,6 +469,80 @@ class TimeSet:
         else:
             return (CompareTime(None), CompareTime(None))
 
+    def make_comparison_set(self, compare_style: CompareStyle) -> ComparisonSet:
+        """
+        Makes a full set of comparisons that will print
+        times and differences in red, green, gold, or white.
+
+        Args:
+            compare_style: CompareStyle determining times to determine green/red with
+
+        Returns:
+            ComparisonSet containing current and best standalone and cumulative times
+        """
+        (current_segments, current_cumulatives) = self.make_compare_times(compare_style)
+        (best_segments, best_cumulatives) = self.best_compare_times
+        return ComparisonSet(
+            current_segments,
+            current_cumulatives,
+            best_segments,
+            best_cumulatives,
+            self.min_best,
+        )
+
+
+    def _time_loop_iteration(
+        self, unix_times: List[float], comparison: ComparisonSet
+    ) -> bool:
+        """
+        Performs a loop of garnering user input while timing a run.
+
+        This function asks the user to press enter when they've completed the next
+        segment. Alternatively, the user could KeyboardInterrupt to unto the last
+        segment completed (or cancel entirely if no segments have been completed) or
+        type "abort" to abort a run without finishing the rest of the segments.
+
+        Args:
+            unix_times: list of times marking beginnings/ends of segments. When
+                entering into first iteration of the loop, unix_times should have
+                one element, the time of the beginning of the first segment.
+                This list will be modified in this function.
+            comparison: comparison times with which to determine color/differential
+
+        Returns:
+            True if input loop should be continued, False if it should be broken
+        """
+        segment_index: int = len(unix_times) - 1
+        if segment_index == self.num_segments:
+            return False
+        prompt_message: str = (
+            f'Finish {self.segments[segment_index]} (or "abort" to cancel run)'
+        )
+        try:
+            prompt_input: str = click.prompt(
+                prompt_message, default="", show_default=False
+            )
+        except (click.Abort, KeyboardInterrupt):
+            unix_times.pop()
+            if unix_times:
+                click.echo(
+                    f'Undoing finish of "{self.segments[segment_index - 1]}"'
+                )
+                return True
+            else:
+                raise KeyboardInterrupt("Aborting run!")
+        if prompt_input.lower() == "abort":
+            return False
+        else:
+            unix_times.append(time.time())
+            comparison.print_segment_terminal_output(
+                segment_index=segment_index,
+                standalone=(unix_times[-1] - unix_times[-2]),
+                cumulative=(unix_times[-1] - unix_times[0]),
+                print_func=click.echo,
+            )
+            return True
+
     def time(self, compare_style: CompareStyle = CompareStyle.BEST_RUN) -> None:
         """
         Interactively times a new run.
@@ -480,51 +552,11 @@ class TimeSet:
         """
         date: datetime = datetime.now()
         logger.info(f"Comparing against {compare_style.name}.")
+        comparison: ComparisonSet = self.make_comparison_set(compare_style)
         click.prompt(f"Start {self.segments[0]}", default="", show_default=False)
-        (compare_segments, compare_cumulatives) = self.make_compare_times(compare_style)
-        (best_segments, best_cumulatives) = self.best_compare_times
         unix_times: List[float] = [time.time()]
-        while True:
-            segment_index: int = len(unix_times) - 1
-            if segment_index == self.num_segments:
-                break
-            prompt_message: str = (
-                f'Finish {self.segments[segment_index]} (or "abort" to cancel run)'
-            )
-            try:
-                prompt_input: str = click.prompt(
-                    prompt_message, default="", show_default=False
-                )
-                if prompt_input.lower() == "abort":
-                    break
-                unix_times.append(time.time())
-            except (click.Abort, KeyboardInterrupt):
-                unix_times.pop()
-                if unix_times:
-                    click.echo(
-                        f'Undoing finish of "{self.segments[segment_index - 1]}"'
-                    )
-                    continue
-                else:
-                    raise KeyboardInterrupt("Aborting run!")
-            segment_time_string: str = compare_terminal_output(
-                segment_index=segment_index,
-                time=(unix_times[-1] - unix_times[-2]),
-                current=compare_segments,
-                best=best_segments,
-                min_best=self.min_best,
-            )
-            echo_message: str = f"Segment time: {segment_time_string}"
-            if segment_index > 0:
-                cumulative_time_string: str = compare_terminal_output(
-                    segment_index=segment_index,
-                    time=(unix_times[-1] - unix_times[0]),
-                    current=compare_cumulatives,
-                    best=best_cumulatives,
-                    min_best=self.min_best,
-                )
-                echo_message += f", cumulative time: {cumulative_time_string}"
-            click.echo(echo_message)
+        while self._time_loop_iteration(unix_times, comparison):
+            pass
         self._process_raw_times(date, unix_times)
         return
 
@@ -694,4 +726,4 @@ class TimeSet:
         Returns:
             total number of seconds spend on this task
         """
-        return np.sum(self.times[self.segments].values)
+        return np.sum(self.values)

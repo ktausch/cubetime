@@ -348,12 +348,16 @@ class TaskIndex:
         """
         if names is None:
             names = self.task_names
-        frame = pd.DataFrame(data=np.ndarray((1, 0)), index=["time spent"])
+        frame = pd.DataFrame(data=np.ndarray((2, 0)), index=["count", "time spent"])
         for name in names:
             timed_task: TimedTask = self[name]
-            frame[timed_task.name] = [timed_task.total_time_spent]
-        frame["total"] = np.sum(frame.values)
-        return frame.T
+            frame[timed_task.name] = [
+                len(timed_task.time_set), timed_task.total_time_spent
+            ]
+        frame["total"] = frame.sum(axis=1)
+        frame = frame.T
+        frame["count"] = frame["count"].astype(int)
+        return frame
 
     def print_time_spent(
         self, names: List[str] = None, print_func: Callable[..., None] = print
@@ -368,7 +372,7 @@ class TaskIndex:
         time_spent: pd.DataFrame = self.time_spent(names)
         print_func()
         print_pandas_dataframe(
-            time_spent, time_columns=list(time_spent.columns), print_func=print_func
+            time_spent, time_columns=["time spent"], print_func=print_func
         )
         print_func()
         return

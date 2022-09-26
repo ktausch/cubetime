@@ -1,6 +1,6 @@
 from enum import Enum
 import numpy as np
-from typing import Optional
+from typing import Callable, Optional
 from typing_extensions import Self
 
 from cubetime.core.Formatting import make_time_string
@@ -170,3 +170,67 @@ def compare_terminal_output(
         color=segment_color,
         bold=True,
     )
+
+
+class ComparisonSet:
+    """Class representing full set of four CompareTime objects to compare to in run."""
+
+    def __init__(
+        self,
+        current_segments: CompareTime,
+        current_cumulatives: CompareTime,
+        best_segments: CompareTime,
+        best_cumulatives: CompareTime,
+        min_best: bool,
+    ):
+        """
+        Assembles a full set of four CompareTime objects.
+
+        Args:
+            current_segments: standalone times being compared to
+            current_cumulatives: cumulative times being compared to
+            best_segments: best standalone times achieved (used to determine gold)
+            best_cumulatives: best cumulative times achieved (used to determine gold)
+            min_best: True if smaller times are better
+        """
+        self.current_segments: CompareTime = current_segments
+        self.current_cumulatives: CompareTime = current_cumulatives
+        self.best_segments: CompareTime = best_segments
+        self.best_cumulatives: CompareTime = best_cumulatives
+        self.min_best: bool = min_best
+
+    def print_segment_terminal_output(
+        self,
+        segment_index: int,
+        standalone: float,
+        cumulative: float,
+        print_func: Callable[..., None] = print,
+    ) -> None:
+        """
+        Creates terminal output for the given segment.
+
+        Args:
+            segment_index: the segment currently being compared against
+            standalone: the standalone time for the given segment
+            cumulative: the cumulative time to the given segment
+            print_func: the function used to print the output
+        """
+        segment_time_string: str = compare_terminal_output(
+            segment_index=segment_index,
+            time=standalone,
+            current=self.current_segments,
+            best=self.best_segments,
+            min_best=self.min_best,
+        )
+        message: str = f"Segment time: {segment_time_string}"
+        if segment_index > 0:
+            cumulative_time_string: str = compare_terminal_output(
+                segment_index=segment_index,
+                time=cumulative,
+                current=self.current_cumulatives,
+                best=self.best_cumulatives,
+                min_best=self.min_best,
+            )
+            message += f", cumulative time: {cumulative_time_string}"
+        print_func(message)
+        return

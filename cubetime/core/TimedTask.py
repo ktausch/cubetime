@@ -153,6 +153,7 @@ class TimedTask:
         """
         Interactively times a new run for this task.
         """
+        logger.info(f"Timing run of {self.name}.")
         self.time_set.time(*args, **kwargs)
         self.time_set.save(self.data_file_name)
         return

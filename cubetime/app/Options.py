@@ -118,7 +118,9 @@ def parse_min_best() -> bool:
     Returns:
         True if smaller times are better than larger times
     """
-    return click.confirm("Are smaller times better for this task?")
+    return click.confirm(
+        "Are smaller times better for this task?", default=True, show_default=True
+    )
 
 
 def compare_style_option(default: CompareStyle):

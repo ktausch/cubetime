@@ -1,7 +1,6 @@
 import click
 from datetime import datetime
 import logging
-import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from typing_extensions import Self
 
@@ -11,6 +10,7 @@ import pandas as pd
 from cubetime.core.CompareStyle import CompareStyle
 from cubetime.core.CompareTime import CompareTime, ComparisonSet
 from cubetime.core.Formatting import print_pandas_dataframe
+from cubetime.core.Timer import Timer
 
 logger = logging.getLogger(__name__)
 
@@ -490,59 +490,6 @@ class TimeSet:
             self.min_best,
         )
 
-
-    def _time_loop_iteration(
-        self, unix_times: List[float], comparison: ComparisonSet
-    ) -> bool:
-        """
-        Performs a loop of garnering user input while timing a run.
-
-        This function asks the user to press enter when they've completed the next
-        segment. Alternatively, the user could KeyboardInterrupt to unto the last
-        segment completed (or cancel entirely if no segments have been completed) or
-        type "abort" to abort a run without finishing the rest of the segments.
-
-        Args:
-            unix_times: list of times marking beginnings/ends of segments. When
-                entering into first iteration of the loop, unix_times should have
-                one element, the time of the beginning of the first segment.
-                This list will be modified in this function.
-            comparison: comparison times with which to determine color/differential
-
-        Returns:
-            True if input loop should be continued, False if it should be broken
-        """
-        segment_index: int = len(unix_times) - 1
-        if segment_index == self.num_segments:
-            return False
-        prompt_message: str = (
-            f'Finish {self.segments[segment_index]} (or "abort" to cancel run)'
-        )
-        try:
-            prompt_input: str = click.prompt(
-                prompt_message, default="", show_default=False
-            )
-        except (click.Abort, KeyboardInterrupt):
-            unix_times.pop()
-            if unix_times:
-                click.echo(
-                    f'Undoing finish of "{self.segments[segment_index - 1]}"'
-                )
-                return True
-            else:
-                raise KeyboardInterrupt("Aborting run!")
-        if prompt_input.lower() == "abort":
-            return False
-        else:
-            unix_times.append(time.time())
-            comparison.print_segment_terminal_output(
-                segment_index=segment_index,
-                standalone=(unix_times[-1] - unix_times[-2]),
-                cumulative=(unix_times[-1] - unix_times[0]),
-                print_func=click.echo,
-            )
-            return True
-
     def time(self, compare_style: CompareStyle = CompareStyle.BEST_RUN) -> None:
         """
         Interactively times a new run.
@@ -553,42 +500,16 @@ class TimeSet:
         date: datetime = datetime.now()
         logger.info(f"Comparing against {compare_style.name}.")
         comparison: ComparisonSet = self.make_comparison_set(compare_style)
-        click.prompt(f"Start {self.segments[0]}", default="", show_default=False)
-        unix_times: List[float] = [time.time()]
-        while self._time_loop_iteration(unix_times, comparison):
-            pass
-        self._process_raw_times(date, unix_times)
-        return
-
-    def _process_raw_times(self, date: datetime, unix_times: List[float]) -> None:
-        """
-        Processes times that were given interactively.
-
-        NOTE: If run was aborted before finishing, fills in remaining segments with NaNs
-
-        Args:
-            date: datetime representing time that run was started
-            unix_times: list of max length self.num_segments+1 giving start/end times
-        """
-        new_times: np.ndarray = np.diff(unix_times)
-        if len(new_times) > 0:
-            num_nans_to_concatenate: int = self.num_segments - len(new_times)
-            if num_nans_to_concatenate > 0:
-                if not self:
-                    click.echo(
-                        "First run must be complete for stability "
-                        "reasons. Not adding times."
-                    )
-                    return
-                nans_to_concatenate = np.ones(num_nans_to_concatenate) * np.nan
-                new_times = np.concatenate([new_times, nans_to_concatenate])
-            if click.confirm("Should this run be added?"):
-                self.add_row(date, new_times)
-                logger.info("Adding new completion time.")
-            else:
-                logger.info("Not adding new time because of user request.")
+        times: np.ndarray = Timer(segments=self.segments, comparison=comparison).time()
+        if np.all(np.isnan(times)):
+            logger.warning(
+                "Not adding new time because run aborted during first segment."
+            )
+        if click.confirm("Should this run be added?"):
+            self.add_row(date, times)
+            logger.info("Added new completion time.")
         else:
-            click.echo("Not adding new time because run aborted during first segment.")
+            logger.info("Did not add new completion time at user request.")
         return
 
     @property
@@ -714,7 +635,6 @@ class TimeSet:
         covariance: np.ndarray = np.dot(differences.T, differences)
         variance: np.ndarray = np.diag(covariance)
         squared_norm: np.ndarray = variance[:,np.newaxis] * variance[np.newaxis,:]
-        norm: np.ndarray = np.sqrt(squared_norm)
         correlation: np.ndarray = covariance / np.sqrt(squared_norm)
         return pd.DataFrame(data=correlation, index=segments, columns=segments)
 

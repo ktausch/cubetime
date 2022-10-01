@@ -138,12 +138,20 @@ class TimePlotter:
             self.times = time_set.cumulative_times if cumulative else time_set.times
         self.cumulative: bool = cumulative and (segments is not None)
 
-    def plot(self, plot_type: PlotType, **extra_kwargs) -> None:
+    def plot(
+        self,
+        plot_type: PlotType,
+        file_name: str = None,
+        headless: bool = False,
+        **extra_kwargs
+    ) -> None:
         """
         Plots histogram or scatter plot.
 
         Args:
             plot_type: the type of plot to make
+            file_name: if not None, matplotlib figure is saved to this file
+            headless: if True, matplotlib.pyplot.show() is not called
             **extra_kwargs: keyword arguments to pass to matplotlib plotting function
         """
         fontsize: int = 12
@@ -168,7 +176,10 @@ class TimePlotter:
         ax.tick_params(labelsize=fontsize, width=2.5, length=7.5, which="major")
         ax.tick_params(width=1.5, length=4.5, which="minor")
         fig.tight_layout()
-        pl.show()
+        if file_name is not None:
+            fig.savefig(file_name)
+        if not headless:
+            pl.show()
         return
 
 def plot_correlations(

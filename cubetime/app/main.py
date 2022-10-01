@@ -172,6 +172,16 @@ def print_times(ctx: click.Context, taskname: str) -> None:
 @string_list_option(
     "segments", "segment name(s)", required=False, help_suffix="make histogram(s) of"
 )
+@click.option("--file_name", "-f", required=False, type=str, help="png file to save")
+@click.option(
+    "--headless",
+    "-h",
+    required=False,
+    default=False,
+    type=bool,
+    is_flag=True,
+    help="skips interactive plotting. Usually used with --file_name",
+)
 @click.pass_context
 def plot(
     ctx: click.Context,
@@ -180,6 +190,8 @@ def plot(
     cumulative_segments: bool,
     plot_type: PlotType,
     segments: List[str] = None,
+    file_name: str = None,
+    headless: bool = False,
 ) -> None:
     """
     Plots distribution of times.
@@ -196,7 +208,7 @@ def plot(
     plotter = TimePlotter(
         timed_task=timed_task, segments=segments, cumulative=cumulative_segments
     )
-    plotter.plot(plot_type)
+    plotter.plot(plot_type, file_name=file_name, headless=headless)
     return
 
 

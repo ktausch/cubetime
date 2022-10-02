@@ -1,4 +1,3 @@
-import click
 from datetime import datetime
 import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -500,16 +499,9 @@ class TimeSet:
         date: datetime = datetime.now()
         logger.info(f"Comparing against {compare_style.name}.")
         comparison: ComparisonSet = self.make_comparison_set(compare_style)
-        times: np.ndarray = Timer(segments=self.segments, comparison=comparison).time()
-        if np.all(np.isnan(times)):
-            logger.warning(
-                "Not adding new time because run aborted during first segment."
-            )
-        if click.confirm("Should this run be added?"):
+        times: Optional[np.ndarray] = Timer(self.segments, comparison).time()
+        if times is not None:
             self.add_row(date, times)
-            logger.info("Added new completion time.")
-        else:
-            logger.info("Did not add new completion time at user request.")
         return
 
     @property

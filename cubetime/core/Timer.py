@@ -1,9 +1,12 @@
 import click
+import logging
 import numpy as np
 import time
-from typing import List
+from typing import List, Optional
 
 from cubetime.core.CompareTime import ComparisonSet
+
+logger = logging.getLogger(__name__)
 
 
 class Timer:
@@ -51,9 +54,7 @@ class Timer:
         except (click.Abort, KeyboardInterrupt):
             unix_times.pop()
             if unix_times:
-                click.echo(
-                    f'Undoing finish of "{self.segments[segment_index - 1]}"'
-                )
+                click.echo(f'Undoing finish of "{self.segments[segment_index - 1]}"')
                 return True
             else:
                 raise KeyboardInterrupt("Aborting run!")
@@ -69,7 +70,7 @@ class Timer:
             )
             return True
 
-    def time(self) -> np.ndarray:
+    def time(self) -> Optional[np.ndarray]:
         """
         Interactively times a new run.
 
@@ -81,5 +82,15 @@ class Timer:
         while self._time_loop_iteration(unix_times):
             pass
         final_times: np.ndarray = np.ones(len(self.segments)) * np.nan
-        final_times[:len(unix_times)] = np.diff(unix_times)
-        return final_times
+        final_times[: len(unix_times)] = np.diff(unix_times)
+        if np.all(np.isnan(final_times)):
+            logger.warning(
+                "Not adding new time because run aborted during first segment."
+            )
+            return None
+        elif click.confirm("Should this run be added?"):
+            logger.info("Adding new completion time.")
+            return final_times
+        else:
+            logger.info("Not adding new completion time at user request.")
+            return None

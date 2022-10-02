@@ -8,7 +8,7 @@ setup(
     author='Keith Tauscher',
     author_email='Keith.Tauscher@gmail.com',
     license='MIT',
-    packages=['cubetime'],
+    packages=['cubetime.app', 'cubetime.core'],
     install_requires=[
         "click",
         "fastparquet",

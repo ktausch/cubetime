@@ -31,17 +31,17 @@ def test_time_set_from_data_frame(copy: bool, multi_segment: bool) -> None:
         copy: if True, TimeSet should copy input data frame
         multi_segment: if True, multiple segments are added instead of just one
     """
-    times: pd.DataFrame = pd.DataFrame(
+    cumulative_times: pd.DataFrame = pd.DataFrame(
         data=[[1.0, datetime.now(), 2.0, 3.0], [2.0, datetime.now(), 3.0, 4.0]],
         columns=["first", "date", "second", "third"],
     )
     if not multi_segment:
-        times = times.iloc[:, :2]
-    time_set: TimeSet = TimeSet(times, copy=copy)
+        cumulative_times = cumulative_times.iloc[:, :2]
+    time_set: TimeSet = TimeSet(cumulative_times, copy=copy)
     expected_segments = ["first"] + (["second", "third"] if multi_segment else [])
     assert time_set.segments == expected_segments
     assert time_set.is_multi_segment == multi_segment
-    assert (time_set.times is times) == (not copy)
+    assert (time_set.cumulative_times is cumulative_times) == (not copy)
     assert time_set.num_segments == len(expected_segments)
     assert len(time_set) == 2
     assert time_set
@@ -72,7 +72,9 @@ def test_add_row() -> None:
     """
     segments: List[str] = ["first", "second"]
     time_set: TimeSet = TimeSet.create_new(segments)
-    time_set.add_row(date=datetime.now(), segment_times=np.linspace(10, 20, 2))
+    time_set.add_row(
+        date=datetime.now(), cumulative_times=np.cumsum(np.linspace(10, 20, 2))
+    )
     assert len(time_set) == 1
     assert time_set
     return
@@ -86,7 +88,9 @@ def test_equality_check() -> None:
     time_set2: TimeSet = TimeSet.create_new(["first", "second"], min_best=False)
     time_set3: TimeSet = TimeSet.create_new(["first", "Second"], min_best=True)
     time_set4: TimeSet = TimeSet.create_new(["first", "second"], min_best=True)
-    time_set4.add_row(date=datetime.now(), segment_times=np.linspace(10, 20, 2))
+    time_set4.add_row(
+        date=datetime.now(), cumulative_times=np.cumsum(np.linspace(10, 20, 2))
+    )
     assert time_set1 == time_set1
     assert time_set1 != time_set2
     assert time_set1 != time_set3
@@ -104,7 +108,9 @@ def test_copy() -> None:
     time_set: TimeSet = TimeSet.create_new(["first", "second"])
     assert time_set == time_set.copy()
     assert time_set == TimeSet.create_new_like(time_set)
-    time_set.add_row(date=datetime.now(), segment_times=np.linspace(10, 20, 2))
+    time_set.add_row(
+        date=datetime.now(), cumulative_times=np.cumsum(np.linspace(10, 20, 2))
+    )
     assert time_set == time_set.copy()
     return
 
@@ -123,8 +129,12 @@ def test_save_and_load() -> None:
     """
     segments: List[str] = ["first", "second"]
     time_set: TimeSet = TimeSet.create_new(segments)
-    time_set.add_row(date=datetime.now(), segment_times=np.linspace(10, 20, 2))
-    time_set.add_row(date=datetime.now(), segment_times=np.linspace(15, 30, 2))
+    time_set.add_row(
+        date=datetime.now(), cumulative_times=np.cumsum(np.linspace(10, 20, 2))
+    )
+    time_set.add_row(
+        date=datetime.now(), cumulative_times=np.cumsum(np.linspace(15, 30, 2))
+    )
     time_set.save(TEST_FILE_NAME)
     try:
         assert time_set == TimeSet.load(TEST_FILE_NAME)
@@ -140,9 +150,15 @@ def test_extreme_run() -> None:
     Tests the best_run_index and worst_run_index properties.
     """
     time_set: TimeSet = TimeSet.create_new(["first", "second"])
-    time_set.add_row(date=datetime.now(), segment_times=np.linspace(10, 15, 2))
-    time_set.add_row(date=datetime.now(), segment_times=np.linspace(10, 20, 2))
-    time_set.add_row(date=datetime.now(), segment_times=np.linspace(15, 30, 2))
+    time_set.add_row(
+        date=datetime.now(), cumulative_times=np.cumsum(np.linspace(10, 15, 2))
+    )
+    time_set.add_row(
+        date=datetime.now(), cumulative_times=np.cumsum(np.linspace(10, 20, 2))
+    )
+    time_set.add_row(
+        date=datetime.now(), cumulative_times=np.cumsum(np.linspace(15, 30, 2))
+    )
     assert time_set.best_run_index == 0
     assert time_set.worst_run_index == 2
     return
@@ -153,7 +169,9 @@ def test_time_spent() -> None:
     Tests the total_time_spent property, which is the sum of all standalone times.
     """
     time_set: TimeSet = TimeSet.create_new(["first", "second"])
-    time_set.add_row(date=datetime.now(), segment_times=np.linspace(10, 15, 2))
+    time_set.add_row(
+        date=datetime.now(), cumulative_times=np.cumsum(np.linspace(10, 15, 2))
+    )
     assert time_set.total_time_spent == 25
     return
 
@@ -190,8 +208,8 @@ def test_dates() -> None:
     time_set: TimeSet = TimeSet.create_new(["first", "second"])
     date1: datetime = datetime.now()
     date2: datetime = datetime.now()
-    time_set.add_row(date=date1, segment_times=np.linspace(10, 20, 2))
-    time_set.add_row(date=date2, segment_times=np.linspace(5, 25, 2))
+    time_set.add_row(date=date1, cumulative_times=np.cumsum(np.linspace(10, 20, 2)))
+    time_set.add_row(date=date2, cumulative_times=np.cumsum(np.linspace(5, 25, 2)))
     assert list(time_set.dates) == [np.datetime64(date1), np.datetime64(date2)]
     return
 
@@ -218,16 +236,16 @@ def time_set_for_compares() -> TimeSet:
     """
     time_set: TimeSet = TimeSet.create_new(["first", "second", "third", "fourth"])
     time_set.add_row(
-        date=datetime.now(), segment_times=np.array([10.0, 20.0, 30.0, 40.0])
+        date=datetime.now(), cumulative_times=np.cumsum([10.0, 20.0, 30.0, 40.0])
     )
     time_set.add_row(
-        date=datetime.now(), segment_times=np.array([15.0, 15.0, 10.0, 30.0])
+        date=datetime.now(), cumulative_times=np.cumsum([15.0, 15.0, 10.0, 30.0])
     )
     time_set.add_row(
-        date=datetime.now(), segment_times=np.array([1.0, 60.0, 60.0, 20.0])
+        date=datetime.now(), cumulative_times=np.cumsum([1.0, 60.0, 60.0, 20.0])
     )
     time_set.add_row(
-        date=datetime.now(), segment_times=np.array([60.0, 1.0, 60.0, 10.0])
+        date=datetime.now(), cumulative_times=np.cumsum([60.0, 1.0, 60.0, 10.0])
     )
     return time_set
 
@@ -298,8 +316,8 @@ def test_correlations() -> None:
     Tests the correlations function, which computes correlations amongst segment times.
     """
     time_set: TimeSet = TimeSet.create_new(["first", "second", "third"])
-    time_set.add_row(date=datetime.now(), segment_times=np.array([1., 2., 3.]))
-    time_set.add_row(date=datetime.now(), segment_times=np.array([2., 1., 5.]))
+    time_set.add_row(date=datetime.now(), cumulative_times=np.cumsum([1., 2., 3.]))
+    time_set.add_row(date=datetime.now(), cumulative_times=np.cumsum([2., 1., 5.]))
     actual_all: np.ndarray = time_set.correlations()
     actual_subset: np.ndarray = time_set.correlations(segments=["first", "third"])
     expected_all: np.ndarray = np.array([[1., -1., 1.], [-1., 1., -1.], [1., -1., 1.]])

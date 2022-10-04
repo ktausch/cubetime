@@ -82,7 +82,7 @@ class Timer:
         while self._time_loop_iteration(unix_times):
             pass
         final_times: np.ndarray = np.ones(len(self.segments)) * np.nan
-        final_times[: len(unix_times)] = np.diff(unix_times)
+        final_times[: len(unix_times)] = np.array(unix_times[1:]) - unix_times[0]
         if np.all(np.isnan(final_times)):
             logger.warning(
                 "Not adding new time because run aborted during first segment."

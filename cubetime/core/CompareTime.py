@@ -92,7 +92,16 @@ class CompareTime:
             return False
         if self.data is None:
             return True
-        return list(self.data) == list(other.data)
+        if len(self.data) != len(other.data):
+            return False
+        this_data = self.data.astype(float)
+        other_data = other.data.astype(float)
+        where_nan = np.isnan(this_data)
+        if np.any(where_nan != np.isnan(other_data)):
+            return False
+        return np.all(
+            np.where(where_nan, 0, this_data) == np.where(where_nan, 0, other_data)
+        )
 
     def compare(
         self, segment_index: int, main_time: float, min_better: bool = True
@@ -108,7 +117,7 @@ class CompareTime:
         Returns:
             CompareResult determining how main_time relates to the times in this object
         """
-        if self.data is None:
+        if (self.data is None) or np.isnan(self.data[segment_index]):
             return CompareResult(CompareResultDiscrete.EQUAL, np.nan)
         difference: float = main_time - self.data[segment_index]
         if difference == 0:

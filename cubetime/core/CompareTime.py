@@ -41,7 +41,7 @@ class CompareResult:
             numerical comparison is available, empty string is returned.
         """
         if np.isnan(self.continuous):
-            return ""
+            return " (????)"
         return f" ({make_time_string(self.continuous, show_plus=True)})"
 
 
@@ -117,10 +117,12 @@ class CompareTime:
         Returns:
             CompareResult determining how main_time relates to the times in this object
         """
-        if (self.data is None) or np.isnan(self.data[segment_index]):
+        if self.data is None:
             return CompareResult(CompareResultDiscrete.EQUAL, np.nan)
         difference: float = main_time - self.data[segment_index]
-        if difference == 0:
+        if np.isnan(difference):
+            return CompareResult(CompareResultDiscrete.EQUAL, np.nan)
+        elif difference == 0:
             return CompareResult(CompareResultDiscrete.EQUAL, difference)
         elif (difference < 0) == min_better:
             return CompareResult(CompareResultDiscrete.BETTER, difference)
@@ -172,7 +174,9 @@ def compare_terminal_output(
     segment_color: str = comparison_color(
         segment_compare_result, best_segment_compare_result
     )
-    main_string: str = make_time_string(time, show_plus=False)
+    main_string: str = "????"
+    if not np.isnan(time):
+        main_string = make_time_string(time, show_plus=False)
     compare_string: str = str(segment_compare_result)
     return terminal_format(
         f"{main_string}{compare_string}",

@@ -58,10 +58,14 @@ class Timer:
                 return True
             else:
                 raise KeyboardInterrupt("Aborting run!")
-        if prompt_input.lower() == "abort":
+        lower_input = prompt_input.lower()
+        if lower_input == "abort":
             return False
         else:
-            unix_times.append(time.time())
+            if lower_input == "skip":
+                unix_times.append(np.nan)
+            else:
+                unix_times.append(time.time())
             self.comparison.print_segment_terminal_output(
                 segment_index=segment_index,
                 standalone=(unix_times[-1] - unix_times[-2]),

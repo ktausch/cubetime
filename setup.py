@@ -15,7 +15,8 @@ setup(
         "matplotlib",
         "numpy",
         "pandas",
-        "pyyaml"
+        "pynput",
+        "pyyaml",
     ],
     classifiers=[
         "Development Status :: 2 - Pre-Alpha",

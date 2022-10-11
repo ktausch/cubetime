@@ -1,12 +1,27 @@
 import click
 import logging
 import numpy as np
+from pynput.keyboard import Controller as KeyboardController
+from pynput.keyboard import Events as KeyboardEvents
+from pynput.keyboard import Key as KeyboardKey
+from pynput.keyboard import KeyCode as KeyboardKeycode
+import signal
 import time
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from cubetime.core.CompareTime import ComparisonSet
 
 logger = logging.getLogger(__name__)
+
+KeyList = List[Union[KeyboardKey, KeyboardKeycode]]
+
+SWALLOW_TIMEOUT: int = 1
+UNDO_KEYS: KeyList = [KeyboardKeycode.from_char("u")]
+ABORT_KEYS: KeyList = [KeyboardKey.esc, KeyboardKeycode.from_char("u")]
+CONTINUE_KEYS: KeyList = [
+    KeyboardKey.enter, KeyboardKey.space, KeyboardKeycode.from_char("c")
+]
+SKIP_KEYS: KeyList = [KeyboardKeycode.from_char("s")]
 
 
 class Timer:
@@ -22,8 +37,61 @@ class Timer:
         """
         self.segments: List[str] = segments
         self.comparison: ComparisonSet = comparison
+        self._unix_times: Optional[List[float]] = None
 
-    def _time_loop_iteration(self, unix_times: List[float]) -> bool:
+    @property
+    def unix_times(self) -> List[float]:
+        """
+        Gets the list of start/end timestamps of current run.
+
+        Returns:
+            List of timestamps [start1, end1, end2, ...]
+        """
+        if self._unix_times is None:
+            self._unix_times = []
+        return self._unix_times
+
+    def restart(self) -> None:
+        """
+        Sets the unix times to list of one timestamp: now.
+        """
+        self._unix_times = None
+        self.unix_times.append(time.time())
+        return
+
+    def _undo(self, segment_index: int) -> None:
+        """
+        Undoes the most recent segment finishing time.
+
+        Args:
+            segment_index: segment currently being timed (the one after the one to undo)
+        """
+        self.unix_times.pop()
+        if self.unix_times:
+            logger.info(f'Undoing finish of "{self.segments[segment_index - 1]}"')
+            return True
+        else:
+            self.restart()
+            return False
+
+    def _add_new_segment(self, segment_index: int, skipped: bool) -> None:
+        """
+        Adds a new segment to the current timestamps.
+
+        Args:
+            segment_index: the index of the segment to add
+            skipped: if True, nan timestamp is added, otherwise now is added
+        """
+        self.unix_times.append(np.nan if skipped else time.time())
+        self.comparison.print_segment_terminal_output(
+            segment_index=segment_index,
+            standalone=(self.unix_times[-1] - self.unix_times[-2]),
+            cumulative=(self.unix_times[-1] - self.unix_times[0]),
+            print_func=click.echo,
+        )
+        return
+
+    def _time_loop_iteration(self, keyboard_event: KeyboardEvents.Press) -> Optional[bool]:
         """
         Performs a loop of garnering user input while timing a run.
 
@@ -32,63 +100,91 @@ class Timer:
         segment completed (or cancel entirely if no segments have been completed) or
         type "abort" to abort a run without finishing the rest of the segments.
 
-        Args:
-            unix_times: list of times marking beginnings/ends of segments. When
-                entering into first iteration of the loop, unix_times should have
-                one element, the time of the beginning of the first segment.
-                This list will be modified in this function.
+        Returns:
+            True if input loop should be continued,
+            False if it should be broken,
+            None if this event did nothing
+        """
+        segment_index: int = len(self.unix_times) - 1
+        log_dispatch = lambda func, event: logging.debug(
+            f"Dispatching to {func} because {event.key} was pressed."
+        )
+        if keyboard_event.key in UNDO_KEYS:
+            log_dispatch("undo", keyboard_event)
+            return self._undo(segment_index)
+        elif keyboard_event.key in CONTINUE_KEYS:
+            log_dispatch("continue", keyboard_event)
+            self._add_new_segment(segment_index, skipped=False)
+            return True
+        elif keyboard_event.key in SKIP_KEYS:
+            log_dispatch("skip", keyboard_event)
+            self._add_new_segment(segment_index, skipped=True)
+            return True
+        elif keyboard_event.key in ABORT_KEYS:
+            log_dispatch("abort", keyboard_event)
+            return False
+        return None
+
+    def _print_next_segment_info(self) -> bool:
+        """
+        Prints out info about the next segment if there is one.
 
         Returns:
-            True if input loop should be continued, False if it should be broken
+            True if there is a next segment, False if the timer is finished
         """
-        segment_index: int = len(unix_times) - 1
-        if segment_index == len(self.segments):
-            return False
-        prompt_message: str = (
-            f'Finish {self.segments[segment_index]} (or "abort" to cancel run)'
-        )
         try:
-            prompt_input: str = click.prompt(
-                prompt_message, default="", show_default=False
+            print(
+                f"Next segment: {self.segments[len(self.unix_times) - 1]} "
+                "(press ESC to abort!)"
             )
-        except (click.Abort, KeyboardInterrupt):
-            unix_times.pop()
-            if unix_times:
-                click.echo(f'Undoing finish of "{self.segments[segment_index - 1]}"')
-                return True
-            else:
-                raise KeyboardInterrupt("Aborting run!")
-        if prompt_input.lower() == "abort":
+        except IndexError:
             return False
         else:
-            unix_times.append(time.time())
-            self.comparison.print_segment_terminal_output(
-                segment_index=segment_index,
-                standalone=(unix_times[-1] - unix_times[-2]),
-                cumulative=(unix_times[-1] - unix_times[0]),
-                print_func=click.echo,
-            )
             return True
+
+    @staticmethod
+    def _swallow_all_queued_keystrokes() -> None:
+        """Swallows keystrokes from run by calling input() repeatedly for one second."""
+        signal.signal(signal.SIGALRM, lambda *args: exec("raise StopIteration"))
+        controller: KeyboardController = KeyboardController()
+        controller.press(KeyboardKey.enter)
+        controller.release(KeyboardKey.enter)
+        try:
+            signal.alarm(SWALLOW_TIMEOUT)
+            while True:
+                input()
+        except StopIteration:
+            pass
+        return
 
     def time(self) -> Optional[np.ndarray]:
         """
         Interactively times a new run.
 
         Returns:
-            times for each of the segments
+            times for each of the segments, None if run shouldn't be added
         """
         click.prompt(f"Start {self.segments[0]}", default="", show_default=False)
-        unix_times: List[float] = [time.time()]
-        while self._time_loop_iteration(unix_times):
-            pass
+        self.restart()
+        with KeyboardEvents() as events:
+            for event in events:
+                if isinstance(event, KeyboardEvents.Press):
+                    logger.info(f"{event.key} pressed: type {type(event.key)}")
+                    iteration_result: Optional[bool] = self._time_loop_iteration(event)
+                    if iteration_result is None:
+                        continue
+                    elif not (iteration_result and self._print_next_segment_info()):
+                        break
+            self._swallow_all_queued_keystrokes()
         final_times: np.ndarray = np.ones(len(self.segments)) * np.nan
-        final_times[: len(unix_times)] = np.array(unix_times[1:]) - unix_times[0]
+        final_times[: len(self.unix_times) - 1] = self.unix_times[1:]
+        final_times -= self.unix_times[0]
         if np.all(np.isnan(final_times)):
             logger.warning(
                 "Not adding new time because run aborted during first segment."
             )
             return None
-        elif click.confirm("Should this run be added?"):
+        elif click.confirm("Should this run be added?", default=None):
             logger.info("Adding new completion time.")
             return final_times
         else:

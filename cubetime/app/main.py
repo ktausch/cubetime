@@ -1,6 +1,6 @@
 import click
 import logging
-from typing import Any, List
+from typing import List
 
 import pandas as pd
 
@@ -19,13 +19,13 @@ from cubetime.app.Plotting import plot_correlations, PlotType, TimePlotter
 
 from cubetime.core.Archiving import make_data_snapshot
 from cubetime.core.CompareStyle import CompareStyle
-from cubetime.core.Config import global_config
+from cubetime.core.Config import DEFAULT_GLOBAL_CONFIG, global_config
 from cubetime.core.Formatting import print_pandas_dataframe
 from cubetime.core.TaskIndex import TaskIndex
 from cubetime.core.TimeSet import TimeSet
 from cubetime.core.TimedTask import TimedTask
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 
 @click.group()
@@ -270,22 +270,16 @@ def config(name: str = None, value: str = None) -> None:
     elif name is None:
         raise click.UsageError("--value can only be given if --name is given")
     else:
-        formatted: Any = value
-        if value.lower() == "true":
-            formatted = True
-        elif value.lower() == "false":
-            formatted = False
-        elif value.isnumeric():
-            formatted = int(value)
-        confirmation_message: str = f"Should it be added with value {formatted}?"
-        if name in global_config:
-            confirmation_message = (
-                f"{name} exists already in cubetime config "
-                f"(value={global_config[name]}). {confirmation_message}"
+        try:
+            confirmation_message: str = (
+                f"Current: {name} -> "
+                f"{DEFAULT_GLOBAL_CONFIG[name].stringifier(global_config[name])}. "
+                f"Should it be changed to {name} -> {value}?"
             )
-        else:
-            confirmation_message = (
-                f"{name} not in cubetime config. {confirmation_message}"
+        except KeyError:
+            raise KeyError(
+                f"{name} not a valid config variable name. The available "
+                f"names are {[key for key in global_config]}"
             )
         if click.confirm(confirmation_message):
             data_directory_confirmation: str = (
@@ -295,7 +289,7 @@ def config(name: str = None, value: str = None) -> None:
                 'command). Are you sure you want to change data_directory?'
             )
             if (name != "data_directory") or click.confirm(data_directory_confirmation):
-                global_config[name] = formatted
+                global_config[name] = value
     return
 
 

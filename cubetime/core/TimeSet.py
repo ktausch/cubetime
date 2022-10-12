@@ -436,7 +436,7 @@ class TimeSet:
                 cumulative_comparison: compare times for cumulative segments
         """
         return self._make_compare_times_from_cumulative_times(
-            self.cumulative_times.loc[which,self.segments].values
+            self.cumulative_times.loc[which, self.segments].values
         )
 
     def _make_balanced_best_compare_times(self) -> Tuple[CompareTime, CompareTime]:
@@ -449,7 +449,7 @@ class TimeSet:
                 segment_comparison: compare times for standalone segments
                 cumulative_comparison: compare times for cumulative segments
         """
-        best_run_times: np.ndarray = self.values[self.best_run_index,:]
+        best_run_times: np.ndarray = self.values[self.best_run_index, :]
         if np.any(np.isnan(best_run_times)):
             raise ValueError(
                 "BALANCED_BEST can't be used if personal best has any missing segments."
@@ -502,7 +502,7 @@ class TimeSet:
             return self._make_balanced_best_compare_times()
         else:
             return CompareTime(None), CompareTime(None)
-    
+
     @property
     def best_compare_times(self) -> Tuple[CompareTime, CompareTime]:
         """
@@ -678,7 +678,7 @@ class TimeSet:
         differences: np.ndarray = times - means
         covariance: np.ndarray = np.dot(differences.T, differences)
         variance: np.ndarray = np.diag(covariance)
-        squared_norm: np.ndarray = variance[:,np.newaxis] * variance[np.newaxis,:]
+        squared_norm: np.ndarray = variance[:, np.newaxis] * variance[np.newaxis, :]
         correlation: np.ndarray = covariance / np.sqrt(squared_norm)
         return pd.DataFrame(data=correlation, index=segments, columns=segments)
 

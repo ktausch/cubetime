@@ -143,7 +143,7 @@ class TimePlotter:
         plot_type: PlotType,
         file_name: str = None,
         headless: bool = False,
-        **extra_kwargs
+        **extra_kwargs,
     ) -> None:
         """
         Plots histogram or scatter plot.
@@ -181,6 +181,7 @@ class TimePlotter:
         if not headless:
             pl.show()
         return
+
 
 def plot_correlations(
     timed_task: TimedTask, segments: List[str] = None, **kwargs

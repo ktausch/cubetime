@@ -125,7 +125,7 @@ def time(ctx: click.Context, taskname: str, compare_style: CompareStyle) -> None
     "task name(s) or alias(es)",
     required=False,
     help_suffix="summarize",
-    letter='s',
+    letter="s",
 )
 @click.pass_context
 def summarize(
@@ -283,10 +283,10 @@ def config(name: str = None, value: str = None) -> None:
             )
         if click.confirm(confirmation_message):
             data_directory_confirmation: str = (
-                'Changing the data directory is potentially destructive. '
-                'It is recommended that you save an image of the data '
+                "Changing the data directory is potentially destructive. "
+                "It is recommended that you save an image of the data "
                 'directory if you have not already done so (see "snapshot" '
-                'command). Are you sure you want to change data_directory?'
+                "command). Are you sure you want to change data_directory?"
             )
             if (name != "data_directory") or click.confirm(data_directory_confirmation):
                 global_config[name] = value
@@ -323,7 +323,7 @@ def snapshot(name: str, force: bool) -> None:
     "task name(s) or alias(es)",
     required=False,
     help_suffix="find time spent on",
-    letter='t',
+    letter="t",
 )
 @click.pass_context
 def time_spent(ctx: click.Context, tasknames: List[str] = None) -> None:
@@ -332,7 +332,7 @@ def time_spent(ctx: click.Context, tasknames: List[str] = None) -> None:
     """
     task_index: TaskIndex = ctx.obj
     task_index.print_time_spent(tasknames, print_func=click.echo)
-    return    
+    return
 
 
 if __name__ == "__main__":

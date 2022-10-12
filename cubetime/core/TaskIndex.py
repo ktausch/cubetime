@@ -352,7 +352,8 @@ class TaskIndex:
         for name in names:
             timed_task: TimedTask = self[name]
             frame[timed_task.name] = [
-                len(timed_task.time_set), timed_task.total_time_spent
+                len(timed_task.time_set),
+                timed_task.total_time_spent,
             ]
         frame["total"] = frame.sum(axis=1)
         frame = frame.T

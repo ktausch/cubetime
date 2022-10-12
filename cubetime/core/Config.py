@@ -3,7 +3,9 @@ import logging
 import os
 from pynput.keyboard import Key as KeyboardKey
 from pynput.keyboard import KeyCode as KeyboardKeyCode
-from typing import Any, Callable, DefaultDict, Dict, Iterator, List, Set, Tuple, Union
+from typing import (
+    Any, Callable, DefaultDict, Dict, Iterator, List, NamedTuple, Set, Union
+)
 import yaml
 
 logger = logging.getLogger(__name__)
@@ -73,26 +75,15 @@ def _key_config_stringifier(keys: List[Union[KeyboardKey, KeyboardKeyCode]]) -> 
     return ",".join(_string_form_of_key(key) for key in keys)
 
 
-class ConfigVariable:
+class ConfigVariable(NamedTuple):
     """A class to represent a config variable and its interface to strings."""
 
-    def __init__(
-        self,
-        string_default: str,
-        parser: Callable[[str], Any],
-        stringifier: Callable[[Any], str]
-    ):
-        """
-        Initializes a new config variable with the given default and string interface.
-
-        Args:
-            string_default: the default value in string form (accepted by parser)
-            parser: function that takes in string form and gives out real form
-            stringifier: function that takes in real form and gives out string form
-        """
-        self.default: str = string_default
-        self.parser: Callable[[str], Any] = parser
-        self.stringifier: Callable[[Any], str] = stringifier
+    default: str
+    """default in string form (accepted by parser)"""
+    parser: Callable[[str], Any]
+    """function that takes in strings and makes values of relevant types"""
+    stringifier: Callable[[Any], str]
+    """function that takes in values of relevant types and makes strings"""
 
 
 DEFAULT_GLOBAL_CONFIG: Dict[str, ConfigVariable] = {

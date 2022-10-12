@@ -4,7 +4,15 @@ import os
 from pynput.keyboard import Key as KeyboardKey
 from pynput.keyboard import KeyCode as KeyboardKeyCode
 from typing import (
-    Any, Callable, DefaultDict, Dict, Iterator, List, NamedTuple, Set, Union
+    Any,
+    Callable,
+    DefaultDict,
+    Dict,
+    Iterator,
+    List,
+    NamedTuple,
+    Set,
+    Union,
 )
 import yaml
 
@@ -43,7 +51,7 @@ def _key_config_parser(string: str) -> List[Union[KeyboardKey, KeyboardKeyCode]]
                     )
         else:
             raise ValueError(
-                'Keys must be alpha-numeric, either single characters '
+                "Keys must be alpha-numeric, either single characters "
                 'on the keyboard or special names like "enter".'
             )
     return final
@@ -212,8 +220,8 @@ class _GlobalConfig:
         formatted: Any = DEFAULT_GLOBAL_CONFIG[key].parser(value)
         self.values[key] = formatted
         logging.info(
-            f'Setting global config variable {key} to {formatted}. '
-            f'The string passed was {value}.'
+            f"Setting global config variable {key} to {formatted}. "
+            f"The string passed was {value}."
         )
         return
 

@@ -25,8 +25,8 @@ def make_data_snapshot(filename: str, force: bool = False) -> None:
     extension_to_type: Dict[str, str] = {".tar.gz": "gztar", ".zip": "zip"}
     archive_type: Optional[str] = None
     for extension in extension_to_type:
-        if filename[-len(extension):] == extension:
-            filename = filename[:-len(extension)]
+        if filename[-len(extension) :] == extension:
+            filename = filename[: -len(extension)]
             archive_type = extension_to_type[extension]
             break
     if archive_type is None:

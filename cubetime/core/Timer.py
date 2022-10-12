@@ -101,22 +101,24 @@ class Timer:
             None if this event did nothing
         """
         segment_index: int = len(self.unix_times) - 1
-        log_dispatch = lambda func, event: logger.debug(
-            f"Dispatching to {func} because {event.key} was pressed."
-        )
+
+        def log_dispatch(func: str) -> None:
+            logger.debug(f"Dispatching to {func} because {event.key} was pressed.")
+            return
+
         if event.key in global_config["undo_keys"]:
-            log_dispatch("undo", event)
+            log_dispatch("undo")
             return self._undo(segment_index)
         elif event.key in global_config["continue_keys"]:
-            log_dispatch("continue", event)
+            log_dispatch("continue")
             self._add_new_segment(segment_index, skipped=False)
             return True
         elif event.key in global_config["skip_keys"]:
-            log_dispatch("skip", event)
+            log_dispatch("skip")
             self._add_new_segment(segment_index, skipped=True)
             return True
         elif event.key in global_config["abort_keys"]:
-            log_dispatch("abort", event)
+            log_dispatch("abort")
             return False
         return None
 
@@ -128,10 +130,7 @@ class Timer:
             True if there is a next segment, False if the timer is finished
         """
         try:
-            print(
-                f"Next segment: {self.segments[len(self.unix_times) - 1]} "
-                "(press ESC to abort!)"
-            )
+            print(f"Next segment: {self.segments[len(self.unix_times) - 1]}")
         except IndexError:
             return False
         else:

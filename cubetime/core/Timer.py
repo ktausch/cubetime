@@ -4,24 +4,16 @@ import numpy as np
 from pynput.keyboard import Controller as KeyboardController
 from pynput.keyboard import Events as KeyboardEvents
 from pynput.keyboard import Key as KeyboardKey
-from pynput.keyboard import KeyCode as KeyboardKeycode
 import signal
 import time
-from typing import List, Optional, Union
+from typing import List, Optional
 
 from cubetime.core.CompareTime import ComparisonSet
+from cubetime.core.Config import global_config
 
 logger = logging.getLogger(__name__)
 
-KeyList = List[Union[KeyboardKey, KeyboardKeycode]]
-
 SWALLOW_TIMEOUT: int = 1
-UNDO_KEYS: KeyList = [KeyboardKeycode.from_char("u")]
-ABORT_KEYS: KeyList = [KeyboardKey.esc, KeyboardKeycode.from_char("u")]
-CONTINUE_KEYS: KeyList = [
-    KeyboardKey.enter, KeyboardKey.space, KeyboardKeycode.from_char("c")
-]
-SKIP_KEYS: KeyList = [KeyboardKeycode.from_char("s")]
 
 
 class Timer:
@@ -67,8 +59,8 @@ class Timer:
             segment_index: segment currently being timed (the one after the one to undo)
         """
         self.unix_times.pop()
+        logger.info(f'Undoing finish of "{self.segments[segment_index - 1]}"')
         if self.unix_times:
-            logger.info(f'Undoing finish of "{self.segments[segment_index - 1]}"')
             return True
         else:
             self.restart()
@@ -91,7 +83,7 @@ class Timer:
         )
         return
 
-    def _time_loop_iteration(self, keyboard_event: KeyboardEvents.Press) -> Optional[bool]:
+    def _time_loop_iteration(self, event: KeyboardEvents.Press) -> Optional[bool]:
         """
         Performs a loop of garnering user input while timing a run.
 
@@ -100,28 +92,31 @@ class Timer:
         segment completed (or cancel entirely if no segments have been completed) or
         type "abort" to abort a run without finishing the rest of the segments.
 
+        Args:
+            event: the event detected by the keyboard listener from pynput
+
         Returns:
             True if input loop should be continued,
             False if it should be broken,
             None if this event did nothing
         """
         segment_index: int = len(self.unix_times) - 1
-        log_dispatch = lambda func, event: logging.debug(
+        log_dispatch = lambda func, event: logger.debug(
             f"Dispatching to {func} because {event.key} was pressed."
         )
-        if keyboard_event.key in UNDO_KEYS:
-            log_dispatch("undo", keyboard_event)
+        if event.key in global_config["undo_keys"]:
+            log_dispatch("undo", event)
             return self._undo(segment_index)
-        elif keyboard_event.key in CONTINUE_KEYS:
-            log_dispatch("continue", keyboard_event)
+        elif event.key in global_config["continue_keys"]:
+            log_dispatch("continue", event)
             self._add_new_segment(segment_index, skipped=False)
             return True
-        elif keyboard_event.key in SKIP_KEYS:
-            log_dispatch("skip", keyboard_event)
+        elif event.key in global_config["skip_keys"]:
+            log_dispatch("skip", event)
             self._add_new_segment(segment_index, skipped=True)
             return True
-        elif keyboard_event.key in ABORT_KEYS:
-            log_dispatch("abort", keyboard_event)
+        elif event.key in global_config["abort_keys"]:
+            log_dispatch("abort", event)
             return False
         return None
 
@@ -164,12 +159,14 @@ class Timer:
         Returns:
             times for each of the segments, None if run shouldn't be added
         """
-        click.prompt(f"Start {self.segments[0]}", default="", show_default=False)
+        click.prompt(
+            f"Press enter to start {self.segments[0]}", default="", show_default=False
+        )
         self.restart()
+        self._print_next_segment_info()
         with KeyboardEvents() as events:
             for event in events:
                 if isinstance(event, KeyboardEvents.Press):
-                    logger.info(f"{event.key} pressed: type {type(event.key)}")
                     iteration_result: Optional[bool] = self._time_loop_iteration(event)
                     if iteration_result is None:
                         continue

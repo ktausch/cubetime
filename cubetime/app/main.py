@@ -25,7 +25,7 @@ from cubetime.core.TaskIndex import TaskIndex
 from cubetime.core.TimeSet import TimeSet
 from cubetime.core.TimedTask import TimedTask
 
-logging.basicConfig(level=logging.DEBUG, force=True)
+logging.basicConfig(level=logging.INFO, force=True)
 
 
 @click.group()

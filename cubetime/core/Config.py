@@ -97,7 +97,7 @@ class ConfigVariable:
 
 DEFAULT_GLOBAL_CONFIG: Dict[str, ConfigVariable] = {
     "data_directory": ConfigVariable(f"{HOME_DIRECTORY}/.cubetime/data", str, str),
-    "num_decimal_places": ConfigVariable("1", int, int),
+    "num_decimal_places": ConfigVariable("1", int, str),
     "skip_keys": ConfigVariable("s", _key_config_parser, _key_config_stringifier),
     "abort_keys": ConfigVariable("esc,a", _key_config_parser, _key_config_stringifier),
     "continue_keys": ConfigVariable(

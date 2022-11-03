@@ -59,7 +59,7 @@ class Timer:
             segment_index: segment currently being timed (the one after the one to undo)
         """
         self.unix_times.pop()
-        logger.info(f'Undoing finish of "{self.segments[segment_index - 1]}"')
+        logger.info(f'Undoing finish of {self.segments[segment_index - 1]}')
         if self.unix_times:
             return True
         else:
@@ -130,7 +130,7 @@ class Timer:
             True if there is a next segment, False if the timer is finished
         """
         try:
-            print(f"Next segment: {self.segments[len(self.unix_times) - 1]}")
+            print(f"Current segment: {self.segments[len(self.unix_times) - 1]}")
         except IndexError:
             return False
         else:

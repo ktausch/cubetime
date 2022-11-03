@@ -66,7 +66,6 @@ class TimeSet:
             return False
         these_times = self.cumulative_times[self.segments].values.astype(float)
         other_times = other.cumulative_times[self.segments].values.astype(float)
-        print(these_times.dtype)
         where_nan = np.isnan(these_times)
         if np.any(where_nan != np.isnan(other_times)):
             return False
@@ -455,10 +454,6 @@ class TimeSet:
                 "BALANCED_BEST can't be used if personal best has any missing segments."
             )
         best_segment_times: np.ndarray = self.best_times.values
-        if np.any(np.isnan(best_segment_times)):
-            raise ValueError(
-                "BALANCED_BEST can't be used if some segments do not have any times."
-            )
         time_saves: np.ndarray = best_run_times - best_segment_times
         balanced_time_save_per_segment: float = np.sum(time_saves) / self.num_segments
         balanced_times: np.ndarray = best_segment_times + balanced_time_save_per_segment
@@ -604,7 +599,7 @@ class TimeSet:
         return result
 
     @property
-    def cumulative_summary(self) -> Optional[pd.DataFrame]:
+    def cumulative_summary(self) -> pd.DataFrame:
         """
         Creates a summary dataframe by computing agg
         functions on cumulative segment times.

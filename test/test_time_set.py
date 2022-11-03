@@ -91,10 +91,18 @@ def test_equality_check() -> None:
     time_set4.add_row(
         date=datetime.now(), cumulative_times=np.cumsum(np.linspace(10, 20, 2))
     )
+    time_set5: TimeSet = TimeSet.create_new(["first", "second"], min_best=True)
+    time_set5.add_row(
+        date=datetime.now(), cumulative_times=np.cumsum(np.linspace(10, 20, 2))
+    )
+    time_set6 = time_set5.copy()
+    time_set6.cumulative_times.iloc[0,1] = np.nan
     assert time_set1 == time_set1
     assert time_set1 != time_set2
     assert time_set1 != time_set3
     assert time_set1 != time_set4
+    assert time_set4 != time_set5
+    assert time_set5 != time_set6
     return
 
 
@@ -308,6 +316,22 @@ def test_average_cumulative_times(time_set_for_compares: TimeSet) -> None:
     """
     times: List[float] = list(time_set_for_compares.average_cumulative_times.values)
     assert times == [21.5, 45.5, 85.5, 110.5]
+    return
+
+
+def test_balanced_best_personal_best_has_nan() -> None:
+    """
+    Tests the fact that BALANCED_BEST splits can't be made if the PB is missing segments
+    """
+    time_set: TimeSet = TimeSet.create_new(["first", "second", "third"])
+    time_set.add_row(date=datetime.now(), cumulative_times=[10, 20, 30])
+    time_set.add_row(date=datetime.now(), cumulative_times=[10, np.nan, 20])
+    try:
+        time_set.make_compare_times(CompareStyle.BALANCED_BEST)
+    except ValueError:
+        pass
+    else:
+        assert False
     return
 
 

@@ -1,6 +1,6 @@
 from datetime import datetime
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 from typing_extensions import Self
 
 import numpy as np
@@ -9,6 +9,7 @@ import pandas as pd
 from cubetime.core.CompareStyle import CompareStyle
 from cubetime.core.CompareTime import CompareTime, ComparisonSet
 from cubetime.core.Formatting import print_pandas_dataframe
+from cubetime.core.KeyboardTimer import KeyboardTimer
 from cubetime.core.Timer import Timer
 
 logger = logging.getLogger(__name__)
@@ -536,17 +537,28 @@ class TimeSet:
             self.min_best,
         )
 
-    def time(self, compare_style: CompareStyle = CompareStyle.BEST_RUN) -> None:
+    def time(
+        self,
+        compare_style: CompareStyle = CompareStyle.BEST_RUN,
+        TimerClass: Type = KeyboardTimer,
+    ) -> None:
         """
         Interactively times a new run.
 
         Args:
             compare_style: the method of comparison
+            TimerClass: the subclass of Timer to use
         """
+        if not issubclass(TimerClass, Timer):
+            raise ValueError(
+                "Cannot use a class that isn't derived from "
+                f"Timer (trying to use {type(self)})."
+            )
         date: datetime = datetime.now()
         logger.info(f"Comparing against {compare_style.name}.")
         comparison: ComparisonSet = self.make_comparison_set(compare_style)
-        cumulative_times: Optional[np.ndarray] = Timer(self.segments, comparison).time()
+        timer: Timer = TimerClass(self.segments, comparison)
+        cumulative_times: Optional[np.ndarray] = timer.time()
         if cumulative_times is not None:
             self.add_row(date, cumulative_times)
         return

@@ -21,6 +21,8 @@ from cubetime.core.Archiving import make_data_snapshot
 from cubetime.core.CompareStyle import CompareStyle
 from cubetime.core.Config import DEFAULT_GLOBAL_CONFIG, global_config
 from cubetime.core.Formatting import print_pandas_dataframe
+from cubetime.core.KeyboardTimer import KeyboardTimer
+from cubetime.core.RockBandPedalTimer import RockBandPedalTimer
 from cubetime.core.TaskIndex import TaskIndex
 from cubetime.core.TimeSet import TimeSet
 from cubetime.core.TimedTask import TimedTask
@@ -103,14 +105,26 @@ def remove_alias(ctx: click.Context, aliases: List[str]) -> None:
 @main.command()
 @taskname_option(required=True, help_suffix="time", allow_alias=True)
 @compare_style_option(default=CompareStyle.BEST_RUN)
+@click.option(
+    "--use-pedal",
+    "-p",
+    default=False,
+    is_flag=True,
+    help="if given, uses pedal-based timer instead of keyboard-based timer",
+)
 @click.pass_context
-def time(ctx: click.Context, taskname: str, compare_style: CompareStyle) -> None:
+def time(
+    ctx: click.Context, taskname: str, compare_style: CompareStyle, use_pedal: bool
+) -> None:
     """
     Interactively times a run of the given task. Asks
     user to hit enter at beginning/end of all splits.
     """
     task_index: TaskIndex = ctx.obj
-    task_index[taskname].time(compare_style=compare_style)
+    task_index[taskname].time(
+        compare_style=compare_style,
+        TimerClass=(RockBandPedalTimer if use_pedal else KeyboardTimer),
+    )
     return
 
 

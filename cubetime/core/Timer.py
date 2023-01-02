@@ -82,11 +82,14 @@ class Timer(metaclass=ABCMeta):
         Returns:
             True if there is a next segment, False if the timer is finished
         """
+        segment_index: int = len(self.unix_times) - 1
         try:
-            print(f"Current segment: {self.segments[len(self.unix_times) - 1]}")
+            output: str = f"Current segment: {self.segments[segment_index]}"
         except IndexError:
             return False
         else:
+            output = f"{output}{self.comparison.time_save_string(segment_index)}"
+            print(output)
             return True
 
     @abstractmethod

@@ -212,6 +212,42 @@ class ComparisonSet:
         self.best_cumulatives: CompareTime = best_cumulatives
         self.min_best: bool = min_best
 
+    def time_save(self, segment_index: int) -> Optional[float]:
+        """
+        Gets the time save available for the given segment.
+
+        Args:
+            segment_index: integer index of the segment to find the time save for
+
+        Returns:
+            difference between the best and current values of the given segment
+        """
+        if (self.best_segments.data is None) or (self.current_segments.data is None):
+            return None
+        best: float = self.best_segments.data[segment_index]
+        current: float = self.current_segments.data[segment_index]
+        save: float = (current - best) * (1 if self.min_best else (-1))
+        return None if np.isnan(save) else save
+
+    def time_save_string(self, segment_index: int) -> str:
+        """
+        Finds a string summarizing the time save available for the given segment.
+
+        Args:
+            segment_index: integer index of the segment to get time save for
+
+        Returns:
+            empty string if time save is undefined,
+            otherwise string of the form f" (possible time save: {some_time_string})"
+        """
+        if (save := self.time_save(segment_index)) is None:
+            return ""
+        else:
+            return (
+                " (possible time save: "
+                f'{terminal_format(make_time_string(save), color="white", bold=True)})'
+            )
+
     def print_segment_terminal_output(
         self,
         segment_index: int,
